@@ -1,0 +1,43 @@
+# EV-Sales — o .gitignore da raiz do desafio cobre SO, editores e Python básico.
+# Este cobre o que é específico deste projeto.
+
+# ── Segredos ────────────────────────────────────────────────────────────────
+# Perder a chave de PII é perder o acesso a nomes e telefones (S-10).
+# Ela mora no gerenciador de senhas do Raí, nunca aqui.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ── Python / backend ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# ── Node / frontend ─────────────────────────────────────────────────────────
+node_modules/
+dist/
+.vite/
+*.local
+
+# ── Volumes e dados locais (S-10) ───────────────────────────────────────────
+storage/
+backups/
+*.dump
+*.sqlite3
+
+# ── Saída de evals e traces locais ──────────────────────────────────────────
+backend/evals/resultados/
+*.trace.json
+
+# ── Logs ────────────────────────────────────────────────────────────────────
+*.log
+logs/

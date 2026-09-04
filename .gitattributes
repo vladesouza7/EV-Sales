@@ -1,0 +1,19 @@
+# O repositório é editado no Windows e roda em containers Linux (S-10).
+# Sem isto, um script com CRLF falha no container com "bad interpreter".
+
+* text=auto eol=lf
+
+# Nunca converter — precisam ser LF mesmo no Windows
+*.sh      text eol=lf
+*.py      text eol=lf
+*.sql     text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+Dockerfile text eol=lf
+.env.example text eol=lf
+
+# Binários
+*.png     binary
+*.jpg     binary
+*.pdf     binary
+*.woff2   binary

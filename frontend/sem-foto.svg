@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img"
+  aria-label="Foto ainda não cadastrada">
+  <rect width="320" height="200" fill="#1b2942" />
+  <g fill="none" stroke="#4a6188" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M74 124h172l-14-34a16 16 0 0 0-15-10H103a16 16 0 0 0-15 10z" />
+    <path d="M62 124h196v22H62z" />
+    <circle cx="98" cy="150" r="12" />
+    <circle cx="222" cy="150" r="12" />
+  </g>
+  <text x="160" y="180" fill="#6c82a8" font-family="system-ui, sans-serif" font-size="13"
+    text-anchor="middle">foto ainda não cadastrada</text>
+</svg>

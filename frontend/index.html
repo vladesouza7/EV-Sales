@@ -43,7 +43,7 @@
       <input id="telefone" name="telefone" type="tel" inputmode="tel" autocomplete="tel"
         maxlength="15" required placeholder="(00) 00000-0000" />
 
-      <p class="aviso-erro" id="erro" role="alert" aria-live="polite"></p>
+      <p class="aviso-erro" id="erro" role="alert"></p>
 
       <button class="principal" type="submit">Conversar com a Aurora</button>
       <a class="saida-pelo-lado" href="/catalogo">prefiro só olhar os carros</a>
@@ -59,7 +59,9 @@
   <script>
     var telefone = document.getElementById("telefone");
     telefone.addEventListener("input", function () {
-      var d = this.value.replace(/\D/g, "").slice(0, 11);
+      var d = this.value.replace(/\D/g, "");
+      if (d.length > 11 && d.slice(0, 2) === "55") d = d.slice(2);
+      d = d.slice(0, 11);
       if (d.length > 6) {
         this.value = "(" + d.slice(0, 2) + ") " + d.slice(2, 7) + "-" + d.slice(7);
       } else if (d.length > 2) {
@@ -87,7 +89,8 @@
         body: JSON.stringify({
           nome: document.getElementById("nome").value,
           telefone: telefone.value,
-          origem: interesse ? "catalogo" : "landing"
+          origem: interesse ? "catalogo" : "landing",
+          interesse: interesse
         })
       });
 
@@ -97,17 +100,22 @@
         location.href = "/conversas/" + criado.conversa_id;
         return;
       }
-      erro.textContent = await mensagemDeErro(resposta);
+      var corpo = await resposta.json().catch(function () { return null; });
+      erro.textContent = mensagemDeErro(corpo);
+      var ativa = corpo && corpo.detail && corpo.detail.conversa_id;
+      if (ativa) {
+        var link = document.createElement("a");
+        link.href = "/conversas/" + ativa;
+        link.textContent = " Voltar para a conversa";
+        erro.appendChild(link);
+      }
     }
 
-    async function mensagemDeErro(resposta) {
-      var corpo = await resposta.json().catch(function () { return null; });
+    function mensagemDeErro(corpo) {
       var detalhe = corpo && corpo.detail;
       if (typeof detalhe === "string") return detalhe;
       if (detalhe && detalhe.mensagem) return detalhe.mensagem;
-      if (Array.isArray(detalhe) && detalhe.length) {
-        return detalhe[0].msg.replace(/^Value error, /, "");
-      }
+      if (Array.isArray(detalhe) && detalhe.length) return detalhe[0].msg;
       return "Não consegui enviar agora. Tenta de novo?";
     }
   </script>

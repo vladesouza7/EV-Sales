@@ -1,5 +1,7 @@
 """S-09 — cifragem, hash indexável e mascaramento na origem."""
 
+import re
+
 import pytest
 
 from app.core.pii import (
@@ -53,13 +55,60 @@ class TestMascaramento:
         ("bruto", "esperado"),
         [
             ("meu cpf é 000.000.000-00", "meu cpf é [CPF-REMOVIDO]"),
+            ("cnpj 12.345.678/0001-95", "cnpj [CNPJ-REMOVIDO]"),
             ("manda pro tarcisio@email.com", "manda pro [EMAIL-REMOVIDO]"),
+            ("manda pro tarcisio@email.com.", "manda pro [EMAIL-REMOVIDO]."),
             ("a placa é ABC1D23", "a placa é [PLACA-REMOVIDA]"),
-            ("meu zap é (83) 98871-4471", "meu zap é [TELEFONE-REMOVIDO]"),
+            ("a placa e abc1d23", "a placa e [PLACA-REMOVIDA]"),
+            ("cartao 4111 1111 1111 1111", "cartao [CARTAO-REMOVIDO]"),
         ],
     )
     def test_redacao_antes_do_prompt(self, bruto: str, esperado: str) -> None:
         assert redigir(bruto) == esperado
+
+    @pytest.mark.parametrize(
+        "bruto",
+        [
+            "meu zap é (83) 98871-4471",
+            "meu zap é +55 83 98871-4471",
+            "meu zap é 5583988714471",
+            "meu zap é 83988714471",
+            "meu zap é 83 98871-4471",
+            # Como se escreve o próprio número para uma loja da cidade: sem DDD.
+            "meu zap é 98871-4471",
+            "meu zap é 988714471",
+            "meu zap é 83 9 8871 4471",
+            # Fixo da loja também é telefone.
+            "liga no 3244-1010",
+        ],
+    )
+    def test_nenhum_formato_de_telefone_escapa(self, bruto: str) -> None:
+        """S-09 §4.2 é categórico: o telefone nunca entra no prompt."""
+        redigido = redigir(bruto)
+        assert "[TELEFONE-REMOVIDO]" in redigido or "[CPF-REMOVIDO]" in redigido
+        assert not re.search(r"\d{4}", redigido), redigido
+
+    def test_numero_do_dominio_nao_e_confundido_com_telefone(self) -> None:
+        """Preço e autonomia atravessam a redação intactos — senão o prompt perde o carro."""
+        assert redigir("o Seal custa R$ 249.990 e faz 372 km") == (
+            "o Seal custa R$ 249.990 e faz 372 km"
+        )
+        assert redigir("são 24999000 centavos") == "são 24999000 centavos"
+
+
+class TestMascaraNaoInventa:
+    def test_entrada_curta_nao_vira_ddd_falso(self) -> None:
+        """`3244-1010` não tem DDD; `(32) *****-1010` seria a máscara mentindo."""
+        assert mascarar_telefone("3244-1010") == "[TELEFONE-REMOVIDO]"
+        assert mascarar_telefone("") == "[TELEFONE-REMOVIDO]"
+
+    def test_nome_vazio_nao_levanta(self) -> None:
+        assert mascarar_nome("") == "[NOME-REMOVIDO]"
+
+    def test_repr_nunca_levanta(self) -> None:
+        """Um `__repr__` que estoura dentro do logging derruba o registro inteiro."""
+        assert "?" in repr(Lead())
+        assert "?" in repr(Lead(nome_cifrado=b"lixo", telefone_cifrado=b"lixo"))
 
 
 class TestDescuidoMaisComum:

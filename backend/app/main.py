@@ -7,9 +7,10 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -36,10 +37,31 @@ app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 BancoDeDados = Annotated[Session, Depends(obter_sessao)]
 
 
+@app.exception_handler(RequestValidationError)
+async def erro_sem_eco_de_pii(_: Request, erro: RequestValidationError) -> JSONResponse:
+    """Invariante 5 — o corpo de erro é uma das quatro superfícies que ela nomeia.
+
+    O Pydantic devolve, por padrão, um campo `input` com o que o cliente digitou: um
+    422 de telefone inválido carregaria o telefone em claro para qualquer coisa que
+    capture resposta de erro (trace, Sentry, log de proxy). Aqui só sai a mensagem.
+    """
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {"loc": list(e["loc"]), "msg": e["msg"].removeprefix("Value error, ")}
+                for e in erro.errors()
+            ]
+        },
+    )
+
+
 class LeadEntrada(BaseModel):
     nome: str
     telefone: str
-    origem: str = "landing"
+    origem: str = Field("landing", max_length=32)
+    # S-01 §6: veio do catálogo por "falar com a Aurora sobre este".
+    interesse: str | None = Field(None, max_length=17)
 
     @field_validator("nome")
     @classmethod
@@ -90,12 +112,15 @@ def criar_lead(
         sessao.add(lead)
         sessao.flush()
     else:
-        lead.ultimo_acesso_em = agora()
+        # A recusa vem antes da escrita: levantar depois descartaria o ultimo_acesso_em
+        # junto com a transação, e a S-01 §4.2 exige que ele seja atualizado.
         _recusar_se_ja_conversa_demais(sessao, lead)
+        lead.ultimo_acesso_em = agora()
 
     conversa = Conversa(
         lead_id=lead.id,
         etapa="saudacao",
+        chassi_em_foco=entrada.interesse,
         token_sessao=secrets.token_urlsafe(32),
         token_expira_em=agora() + VALIDADE_SESSAO,
     )

@@ -37,10 +37,14 @@
       style: "currency", currency: "BRL", maximumFractionDigits: 0
     });
 
+    // O banco guarda o token; a tela mostra o nome. O rótulo nunca some — é ele que
+    // impede o cliente de ler 533 (WLTP) e 481 (Inmetro) como se fossem comparáveis.
+    var FONTES = { INMETRO_PBEV_2026: "Inmetro", WLTP: "WLTP", FABRICANTE: "fabricante" };
+
     function autonomia(carro) {
       // ADR-003: sem fonte confirmada não se estima, e a fonte nunca fica implícita.
       if (carro.autonomia_km === null) return "autonomia: vou confirmar com a loja";
-      return carro.autonomia_km + " km — " + carro.autonomia_fonte;
+      return carro.autonomia_km + " km — " + (FONTES[carro.autonomia_fonte] || carro.autonomia_fonte);
     }
 
     function versao(carro) {
@@ -56,6 +60,7 @@
       var foto = document.createElement("img");
       foto.alt = "";
       foto.src = carro.foto_url || "/static/sem-foto.svg";
+      foto.onerror = function () { this.onerror = null; this.src = "/static/sem-foto.svg"; };
 
       var corpo = document.createElement("div");
       corpo.className = "corpo";

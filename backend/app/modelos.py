@@ -1,6 +1,7 @@
 """Tabelas do EV-Sales. Nomes em português: a equipe da Sol & Volt lê este código."""
 
 import uuid
+from collections.abc import Callable
 
 from sqlalchemy import (
     BigInteger,
@@ -22,6 +23,9 @@ ETAPAS = (
     "aguardando_aprovacao", "reserva", "test_drive", "humano", "encerrada",
 )  # fmt: skip
 STATUS_UNIDADE = ("disponivel", "reservado", "vendido", "indisponivel")
+# S-03 §1. Fonte fora desta lista não entra: WLTP e Inmetro só não se confundem
+# enquanto o rótulo tiver uma grafia só (invariante 6).
+FONTES_DE_AUTONOMIA = ("INMETRO_PBEV_2026", "WLTP", "FABRICANTE")
 
 
 class Lead(Base):
@@ -36,11 +40,24 @@ class Lead(Base):
     ultimo_acesso_em: Mapped[object] = mapped_column(DateTime(timezone=True), default=agora)
 
     def __repr__(self) -> str:
-        """S-09 §2 — o descuido mais comum (`logger.info(f"{lead}")`) já sai protegido."""
-        return (
-            f"<Lead {self.id} {mascarar_nome(decifrar(self.nome_cifrado))} "
-            f"{mascarar_telefone(decifrar(self.telefone_cifrado))}>"
+        """S-09 §2 — o descuido mais comum (`logger.info(f"{lead}")`) já sai protegido.
+
+        Nunca levanta: um `__repr__` que estoura dentro do `logging` derruba o registro
+        inteiro, e é justamente no log que esta proteção precisa funcionar. Objeto
+        recém-construído, chave ausente ou blob corrompido saem como `?`, não como erro.
+        """
+        return f"<Lead {self.id} {self._mascarado(mascarar_nome, self.nome_cifrado)} " + (
+            f"{self._mascarado(mascarar_telefone, self.telefone_cifrado)}>"
         )
+
+    @staticmethod
+    def _mascarado(mascarar: Callable[[str], str], blob: bytes | None) -> str:
+        if not blob:
+            return "?"
+        try:
+            return mascarar(decifrar(blob))
+        except Exception:
+            return "?"
 
 
 class Conversa(Base):
@@ -78,6 +95,10 @@ class Unidade(Base):
         CheckConstraint(
             "(autonomia_km IS NULL) = (autonomia_fonte IS NULL)",
             name="ck_unidades_autonomia_sempre_com_fonte",
+        ),
+        CheckConstraint(
+            f"autonomia_fonte IS NULL OR autonomia_fonte IN {FONTES_DE_AUTONOMIA}",
+            name="ck_unidades_fonte_de_autonomia_conhecida",
         ),
     )
 

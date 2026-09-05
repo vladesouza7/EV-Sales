@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ia.tools.estoque import buscar_unidades
-from app.modelos import Unidade
+from app.modelos import Lead, Unidade
 
 SEAL_BRANCO = dict(
     chassi="9BWZZZ377VT004471",
@@ -87,13 +87,23 @@ def test_catalogo_e_aurora_leem_a_mesma_tool(cliente: TestClient, sessao: Sessio
     assert cliente.get("/api/catalogo").json() == da_tool
 
 
-def test_pagina_do_catalogo_nao_tem_chat(cliente: TestClient) -> None:
+def test_pagina_do_catalogo_nao_tem_chat_nem_cadastro(cliente: TestClient) -> None:
+    """S-01 §6: somente leitura, sem chat, sem cadastro."""
     pagina = cliente.get("/catalogo")
 
     assert pagina.status_code == 200
-    assert "prefiro só olhar" not in pagina.text
-    assert "chat-input" not in pagina.text
+    # Nada que receba texto do cliente: nem formulário, nem campo, nem POST.
+    assert "<form" not in pagina.text
+    assert "<input" not in pagina.text
+    assert "/api/leads" not in pagina.text
     assert "interesse=" in pagina.text
+
+
+def test_olhar_o_catalogo_nao_cria_lead(cliente: TestClient, sessao: Session) -> None:
+    cliente.get("/catalogo")
+    cliente.get("/api/catalogo")
+
+    assert sessao.scalars(select(Lead)).all() == []
 
 
 def test_landing_tem_a_saida_pelo_lado(cliente: TestClient) -> None:

@@ -32,7 +32,7 @@ UNIDADES = [
         km=0,
         preco_centavos=11890000,
         autonomia_km=280,
-        autonomia_fonte="INMETRO_PBEV",
+        autonomia_fonte="INMETRO_PBEV_2026",
         foto_url="/static/fotos/dolphin-mini-branco.jpg",
     ),
     dict(
@@ -46,7 +46,7 @@ UNIDADES = [
         km=0,
         preco_centavos=14999000,
         autonomia_km=291,
-        autonomia_fonte="INMETRO_PBEV",
+        autonomia_fonte="INMETRO_PBEV_2026",
         foto_url="/static/fotos/dolphin-azul.jpg",
     ),
     # O par que o Raí citou: mesmo modelo, duas cores, um de cada. Não existe "outro igual".
@@ -61,7 +61,7 @@ UNIDADES = [
         km=0,
         preco_centavos=24999000,
         autonomia_km=372,
-        autonomia_fonte="INMETRO_PBEV",
+        autonomia_fonte="INMETRO_PBEV_2026",
         foto_url="/static/fotos/seal-branco.jpg",
     ),
     dict(
@@ -75,7 +75,7 @@ UNIDADES = [
         km=0,
         preco_centavos=24999000,
         autonomia_km=372,
-        autonomia_fonte="INMETRO_PBEV",
+        autonomia_fonte="INMETRO_PBEV_2026",
         foto_url="/static/fotos/seal-cinza.jpg",
     ),
     dict(
@@ -89,7 +89,7 @@ UNIDADES = [
         km=0,
         preco_centavos=50319000,
         autonomia_km=481,
-        autonomia_fonte="INMETRO_PBEV",
+        autonomia_fonte="INMETRO_PBEV_2026",
         foto_url="/static/fotos/blazer-ev-rs.jpg",
     ),
     # Importado: publica WLTP, e o rótulo viaja junto. WLTP e Inmetro não se comparam.

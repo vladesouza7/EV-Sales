@@ -45,22 +45,53 @@ def hash_telefone(e164: str) -> str:
 
 
 def mascarar_telefone(e164: str) -> str:
-    digitos = re.sub(r"\D", "", e164)[-11:]
+    """`+5583988714471` → `(83) *****-4471`.
+
+    Entrada curta demais não vira máscara inventada: `3244-1010` não tem DDD, e
+    devolver `(32) *****-1010` seria a máscara mentindo sobre o número.
+    """
+    digitos = re.sub(r"\D", "", e164)
+    if len(digitos) < 10:
+        return "[TELEFONE-REMOVIDO]"
+    digitos = digitos[-11:] if len(digitos) >= 11 else digitos[-10:]
     return f"({digitos[:2]}) *****-{digitos[-4:]}"
 
 
 def mascarar_nome(nome: str) -> str:
     partes = nome.split()
+    if not partes:
+        return "[NOME-REMOVIDO]"
     return partes[0] if len(partes) == 1 else f"{partes[0]} {partes[-1][0]}."
 
 
+# Um celular colado com DDD (11 dígitos) e um CPF sem pontuação têm o mesmo tamanho.
+# Numa concessionária o cliente digita o telefone muito mais vezes do que o CPF, então
+# `\d{2}9\d{8}` é lido como telefone. Os dois são redigidos; só o rótulo difere.
+_TELEFONE = "|".join(
+    (
+        r"\+?55[\s.\-]?\(?\d{2}\)?[\s.\-]?9?[\s.\-]?\d{4}[\s.\-]?\d{4}",  # com código do país
+        r"\(\d{2}\)[\s.\-]?9?[\s.\-]?\d{4}[\s.\-]?\d{4}",  # DDD entre parênteses
+        r"\b\d{2}[\s.\-]9[\s.\-]?\d{4}[\s.\-]?\d{4}\b",  # DDD solto + nono dígito
+        r"\b\d{2}9\d{8}\b",  # 11 dígitos colados
+        r"\b9[\s.\-]?\d{4}[\s.\-]?\d{4}\b",  # celular sem DDD, como se escreve na cidade
+        r"\b[2-5]\d{3}[\s.\-]\d{4}\b",  # fixo sem DDD
+    )
+)
+
+# A ordem é a regra: o padrão mais longo e mais específico corre primeiro, senão o
+# curto come um pedaço do longo e o resto vaza. CPF vem depois do telefone porque
+# telefone tem forma reconhecível; cartão vem antes de tudo que é numérico curto.
 _REDACOES: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), "[EMAIL-REMOVIDO]"),
+    (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "[EMAIL-REMOVIDO]"),
     (re.compile(r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b"), "[CNPJ-REMOVIDO]"),
-    (re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b"), "[CPF-REMOVIDO]"),
-    (re.compile(r"\b[A-Z]{3}\d[A-Z]\d{2}\b|\b[A-Z]{3}-?\d{4}\b"), "[PLACA-REMOVIDA]"),
     (re.compile(r"\b(?:\d[ -]?){16}\b"), "[CARTAO-REMOVIDO]"),
-    (re.compile(r"(?:\+?55\s*)?\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4}"), "[TELEFONE-REMOVIDO]"),
+    (re.compile(_TELEFONE), "[TELEFONE-REMOVIDO]"),
+    (re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b"), "[CPF-REMOVIDO]"),
+    # Sem IGNORECASE a placa passa em claro: no celular ninguém digita em maiúscula.
+    (
+        re.compile(r"\b[A-Z]{3}\d[A-Z]\d{2}\b|\b[A-Z]{3}-?\d{4}\b", re.IGNORECASE),
+        "[PLACA-REMOVIDA]",
+    ),
 )
 
 

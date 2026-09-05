@@ -46,6 +46,40 @@ def test_telefone_fixo_e_recusado_com_orientacao(cliente: TestClient, sessao: Se
     assert sessao.scalars(select(Lead)).all() == []
 
 
+def test_erro_de_validacao_nao_ecoa_o_que_o_cliente_digitou(cliente: TestClient) -> None:
+    """Invariante 5 — `erro` é uma das quatro superfícies que ela nomeia."""
+    resposta = cliente.post("/api/leads", json={**VALIDO, "telefone": "(83) 3244-1010"})
+
+    assert "3244-1010" not in resposta.text
+    assert "32441010" not in resposta.text
+    assert "input" not in resposta.json()["detail"][0]
+
+
+def test_origem_longa_demais_nao_derruba_o_servidor(cliente: TestClient) -> None:
+    resposta = cliente.post("/api/leads", json={**VALIDO, "origem": "x" * 200})
+    assert resposta.status_code == 422
+
+
+def test_interesse_do_catalogo_chega_na_conversa(cliente: TestClient, sessao: Session) -> None:
+    """S-01 §6 — a Aurora abre a conversa já sabendo de qual chassi se trata."""
+    chassi = "9BWZZZ377VT004471"
+    cliente.post("/api/leads", json={**VALIDO, "origem": "catalogo", "interesse": chassi})
+
+    assert sessao.scalars(select(Conversa)).one().chassi_em_foco == chassi
+
+
+def test_cliente_que_volta_tem_ultimo_acesso_atualizado(
+    cliente: TestClient, sessao: Session
+) -> None:
+    cliente.post("/api/leads", json=VALIDO)
+    antes = sessao.scalars(select(Lead)).one().ultimo_acesso_em
+
+    cliente.post("/api/leads", json=VALIDO)
+    sessao.expire_all()
+
+    assert sessao.scalars(select(Lead)).one().ultimo_acesso_em > antes
+
+
 def test_nome_com_digito_e_recusado(cliente: TestClient, sessao: Session) -> None:
     resposta = cliente.post("/api/leads", json={**VALIDO, "nome": "Tarcisio 2"})
 

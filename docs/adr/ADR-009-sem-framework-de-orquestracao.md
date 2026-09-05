@@ -26,16 +26,16 @@ da conversa é uma máquina de estados materializada em tabelas do Postgres.
 
 ```python
 # em cada turno, o estado é RECONSTRUÍDO do Postgres — nunca mantido em memória
-estado    = carregar_estado(conversa_id)      # etapa, qualificação, chassi em foco
-historico = carregar_mensagens(conversa_id)   # a conversa inteira, dos dois canais
+estado = carregar_estado(conversa_id)  # etapa, qualificação, chassi em foco
+historico = carregar_mensagens(conversa_id)  # a conversa inteira, dos dois canais
 
 while True:
     resposta = llm.chamar(prompt(estado), historico, tools=tools_da_etapa(estado))
     if not resposta.tool_calls:
         break
     for chamada in resposta.tool_calls:
-        registrar_span(chamada)               # ADR-006
-        historico.append(executar(chamada))   # a tool pode mudar a etapa
+        registrar_span(chamada)  # ADR-006
+        historico.append(executar(chamada))  # a tool pode mudar a etapa
 ```
 
 Duas propriedades vêm de graça desse desenho:

@@ -43,9 +43,9 @@ custo_mes    = contador incremental em Redis, chave "custo:2026-09", com backup 
 ```python
 def pode_chamar_llm() -> Decisao:
     gasto = redis.get(f"custo:{mes_atual()}")
-    if gasto >= TETO_MENSAL:          # R$ 900
+    if gasto >= TETO_MENSAL:  # R$ 900
         return Decisao.CORTAR
-    if gasto >= TETO_MENSAL * 0.8:    # R$ 720
+    if gasto >= TETO_MENSAL * 0.8:  # R$ 720
         alertar_uma_vez_por_dia()
     return Decisao.SEGUIR
 ```

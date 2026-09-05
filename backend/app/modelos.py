@@ -2,15 +2,19 @@
 
 import uuid
 from collections.abc import Callable
+from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
+    Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -36,8 +40,8 @@ class Lead(Base):
     telefone_cifrado: Mapped[bytes] = mapped_column(LargeBinary)
     telefone_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     origem: Mapped[str] = mapped_column(String(32), default="landing")
-    criado_em: Mapped[object] = mapped_column(DateTime(timezone=True), default=agora)
-    ultimo_acesso_em: Mapped[object] = mapped_column(DateTime(timezone=True), default=agora)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    ultimo_acesso_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
     def __repr__(self) -> str:
         """S-09 §2 — o descuido mais comum (`logger.info(f"{lead}")`) já sai protegido.
@@ -78,9 +82,11 @@ class Conversa(Base):
     chassi_em_foco: Mapped[str | None] = mapped_column(String(17), default=None)
     trace_id: Mapped[str | None] = mapped_column(String(64), default=None)
     token_sessao: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    token_expira_em: Mapped[object] = mapped_column(DateTime(timezone=True))
-    criada_em: Mapped[object] = mapped_column(DateTime(timezone=True), default=agora)
-    ultima_mensagem_em: Mapped[object | None] = mapped_column(DateTime(timezone=True), default=None)
+    token_expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    criada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    ultima_mensagem_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
 
 
 class Unidade(Base):
@@ -116,4 +122,44 @@ class Unidade(Base):
     foto_url: Mapped[str | None] = mapped_column(String(200), default=None)
     status: Mapped[str] = mapped_column(String(14), default="disponivel", index=True)
     reservado_para: Mapped[uuid.UUID | None] = mapped_column(default=None)
-    reservado_em: Mapped[object | None] = mapped_column(DateTime(timezone=True), default=None)
+    reservado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
+class Mensagem(Base):
+    """S-02 §1 — `canal` é coluna da mensagem, não da conversa.
+
+    É o que faz o handoff do ADR-005 funcionar sem migração de sessão: a conversa
+    troca de canal e mantém id, histórico e qualificação.
+    """
+
+    __tablename__ = "mensagens"
+    __table_args__ = (
+        CheckConstraint("direcao IN ('entrada', 'saida')", name="ck_mensagens_direcao"),
+        CheckConstraint(
+            "autor IN ('cliente', 'aurora', 'vendedor')", name="ck_mensagens_autor"
+        ),
+        CheckConstraint("canal IN ('web', 'whatsapp')", name="ck_mensagens_canal"),
+        # A fila de turnos da S-02 §4 é esta tabela: só o que entrou pode estar pendente.
+        CheckConstraint(
+            "direcao = 'entrada' OR processada_em IS NOT NULL",
+            name="ck_mensagens_saida_nunca_pendente",
+        ),
+        Index("ix_mensagens_conversa_criada", "conversa_id", "criada_em"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Sem índice próprio: o composto abaixo já cobre a busca por conversa.
+    conversa_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversas.id", ondelete="CASCADE"))
+    direcao: Mapped[str] = mapped_column(String(8))
+    autor: Mapped[str] = mapped_column(String(10))
+    canal: Mapped[str] = mapped_column(String(10), default="web")
+    conteudo: Mapped[str] = mapped_column(Text)
+    gerada_por_ia: Mapped[bool] = mapped_column(Boolean, default=False)
+    whatsapp_message_id: Mapped[str | None] = mapped_column(String(64), default=None)
+    payload_bruto: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    criada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    # ponytail: a fila de turnos é esta coluna, não um broker. Vira fila de verdade
+    # quando houver mais de um worker consumindo a mesma conversa.
+    processada_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )

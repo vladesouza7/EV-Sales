@@ -1,4 +1,4 @@
-"""S-01 — landing da Sol & Volt, captura de lead e catálogo somente-leitura."""
+"""Aplicação da Sol & Volt: S-01 (landing, lead, catálogo) e S-02 (chat e sessão)."""
 
 import logging
 import secrets
@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.conversas import router as rotas_de_conversa
 from app.core.pii import cifrar, hash_telefone, mascarar_telefone
 from app.core.validacao import normalizar_nome, normalizar_telefone
 from app.db import agora, obter_sessao
@@ -33,6 +34,7 @@ logger = logging.getLogger("evsales")
 
 app = FastAPI(title="EV-Sales — Sol & Volt")
 app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
+app.include_router(rotas_de_conversa)
 
 BancoDeDados = Annotated[Session, Depends(obter_sessao)]
 

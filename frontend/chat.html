@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conversando com a Aurora — Sol &amp; Volt</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+</head>
+
+<body class="pagina-chat">
+  <header class="wrap nav">
+    <a class="marca" href="/">
+      <span class="marca-simbolo">⚡</span>
+      <span>
+        <b>Aurora</b>
+        <small>consultora da Sol &amp; Volt · Tambaú</small>
+      </span>
+    </a>
+    <div class="acoes">
+      <!-- S-02 §5: sempre visível, em toda etapa. Não é saída de emergência escondida. -->
+      <button class="humano" type="button" onclick="chamarPessoa()">falar com uma pessoa</button>
+      <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+    </div>
+  </header>
+
+  <main class="wrap conversa">
+    <div id="mensagens" class="mensagens" aria-live="polite" aria-label="Conversa"></div>
+
+    <p id="situacao" class="situacao" hidden></p>
+
+    <form class="escrever" onsubmit="enviar(event)">
+      <label class="oculto" for="conteudo">Sua mensagem</label>
+      <textarea id="conteudo" rows="1" maxlength="2000" placeholder="Escreva pra Aurora…"
+        onkeydown="atalhoDeEnvio(event)"></textarea>
+      <button class="principal enviar" type="submit" aria-label="Enviar">➤</button>
+    </form>
+  </main>
+
+  <script src="/static/tema.js"></script>
+  <script>
+    var CONVERSA = location.pathname.split("/").pop();
+    var lista = document.getElementById("mensagens");
+    var situacao = document.getElementById("situacao");
+    var campo = document.getElementById("conteudo");
+    var bolhaEmCurso = null;
+
+    function noFim() {
+      // S-02 §5: rolagem automática só para quem já está no fim. Quem subiu, fica.
+      return lista.scrollHeight - lista.scrollTop - lista.clientHeight < 60;
+    }
+
+    function rolar(estavaNoFim) {
+      if (estavaNoFim) lista.scrollTop = lista.scrollHeight;
+    }
+
+    function bolha(autor, texto) {
+      var estavaNoFim = noFim();
+      var elemento = document.createElement("div");
+      elemento.className = "bolha " + (autor === "cliente" ? "minha" : "dela");
+      if (autor !== "cliente") {
+        var nome = document.createElement("b");
+        nome.textContent = autor === "aurora" ? "Aurora" : "Sol & Volt";
+        elemento.appendChild(nome);
+      }
+      var corpo = document.createElement("span");
+      corpo.textContent = texto || "";
+      elemento.appendChild(corpo);
+      lista.appendChild(elemento);
+      rolar(estavaNoFim);
+      return corpo;
+    }
+
+    function dizer(texto) {
+      situacao.textContent = texto || "";
+      situacao.hidden = !texto;
+      rolar(noFim());
+    }
+
+    async function carregar() {
+      var resposta = await fetch("/api/conversas/" + CONVERSA);
+      if (resposta.status === 401 || resposta.status === 404) {
+        location.href = "/?de_volta=1";
+        return;
+      }
+      var conversa = await resposta.json();
+      conversa.mensagens.forEach(function (m) { bolha(m.autor, m.conteudo); });
+      if (!conversa.mensagens.length) {
+        bolha("aurora", "Oi! Me conta o que você procura que eu já vejo o que temos na loja hoje.");
+      }
+      if (conversa.modo === "humano") emModoHumano();
+      lista.scrollTop = lista.scrollHeight;
+      ouvir();
+    }
+
+    function ouvir() {
+      // O EventSource reconecta sozinho e manda Last-Event-ID: a retomada da §3 é dele.
+      var fonte = new EventSource("/api/conversas/" + CONVERSA + "/stream");
+
+      fonte.addEventListener("tool_inicio", function (evento) {
+        var nome = JSON.parse(evento.data).nome;
+        dizer(nome === "buscar_unidades"
+          ? "Aurora está consultando o estoque…"
+          : "Aurora está conferindo uma informação…");
+      });
+
+      fonte.addEventListener("tool_fim", function () { dizer("Aurora está escrevendo…"); });
+
+      fonte.addEventListener("token", function (evento) {
+        if (!bolhaEmCurso) bolhaEmCurso = bolha("aurora", "");
+        var estavaNoFim = noFim();
+        bolhaEmCurso.textContent += JSON.parse(evento.data).texto;
+        rolar(estavaNoFim);
+      });
+
+      fonte.addEventListener("mensagem_fim", function () {
+        bolhaEmCurso = null;
+        dizer("");
+      });
+
+      fonte.addEventListener("aguardando", function () {
+        dizer("Estou confirmando a condição com a nossa gerente. Volto em instantes — "
+          + "pode deixar essa janela aberta.");
+      });
+
+      fonte.addEventListener("erro", function (evento) {
+        bolhaEmCurso = null;
+        bolha("aurora", JSON.parse(evento.data).mensagem_ao_cliente);
+        dizer("");
+      });
+    }
+
+    async function enviar(evento) {
+      evento.preventDefault();
+      var conteudo = campo.value.trim();
+      if (!conteudo) return;
+      campo.value = "";
+      bolha("cliente", conteudo);
+      dizer("Aurora está escrevendo…");
+
+      var resposta = await fetch("/api/conversas/" + CONVERSA + "/mensagens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conteudo: conteudo })
+      });
+      if (!resposta.ok) {
+        var corpo = await resposta.json().catch(function () { return null; });
+        dizer((corpo && corpo.detail && corpo.detail.mensagem) || "Não consegui enviar agora.");
+        return;
+      }
+      if ((await resposta.json()).modo === "humano") emModoHumano();
+    }
+
+    function atalhoDeEnvio(evento) {
+      if (evento.key === "Enter" && !evento.shiftKey) {
+        evento.preventDefault();
+        enviar(evento);
+      }
+    }
+
+    async function chamarPessoa() {
+      await fetch("/api/conversas/" + CONVERSA + "/humano", { method: "POST" });
+      emModoHumano();
+    }
+
+    function emModoHumano() {
+      dizer("Avisei o time. Tarcísio ou Jaqueline continuam com você por aqui.");
+    }
+
+    carregar();
+  </script>
+</body>
+
+</html>

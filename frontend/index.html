@@ -71,7 +71,15 @@
       }
     });
 
-    var interesse = new URLSearchParams(location.search).get("interesse");
+    var parametros = new URLSearchParams(location.search);
+    // S-02 §6: sessão expirada volta pra cá. O lead é reconhecido pelo telefone_hash.
+    if (parametros.get("de_volta")) {
+      var volta = document.getElementById("interesse-aviso");
+      volta.textContent = "Que bom te ver de novo! Confirma nome e WhatsApp que eu retomo daqui.";
+      volta.hidden = false;
+    }
+
+    var interesse = parametros.get("interesse");
     if (interesse) {
       var aviso = document.getElementById("interesse-aviso");
       aviso.textContent = "A Aurora já vai abrir a conversa sobre o chassi " + interesse + ".";

@@ -5,55 +5,93 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sol &amp; Volt Veículos Elétricos — converse com a Aurora</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="/static/estilo.css" />
 </head>
 
 <body>
-  <header class="wrap nav">
-    <a class="marca" href="/">
-      <span class="marca-simbolo">⚡</span>
-      <span>
-        <b>Sol &amp; Volt Veículos Elétricos</b>
-        <small>Tambaú, João Pessoa</small>
-      </span>
-    </a>
-    <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
-  </header>
+  <div class="pagina">
+    <div class="grade" aria-hidden="true"></div>
 
-  <main class="wrap chamada">
-    <div>
-      <h1>Descubra qual elétrico combina com a sua rotina — em 3 minutos, conversando.</h1>
-      <!-- Texto exato do ADR-010 §1. Mudar aqui é mudar a decisão: abra um ADR novo. -->
-      <div class="aurora">
-        <strong>Oi! Sou a Aurora, consultora da Sol &amp; Volt.</strong>
-        Me diz seu nome e WhatsApp que eu já te mostro o que temos na loja hoje — com preço e
-        disponibilidade real, não tabela desatualizada.
-        <em>Seu contato fica só aqui com a gente. Se pedir, eu apago.</em>
+    <header class="wrap nav">
+      <a class="marca" href="/">
+        <span class="marca-simbolo">⚡</span>
+        <span>
+          <b>Sol &amp; Volt Veículos Elétricos</b>
+          <small>Tambaú, João Pessoa</small>
+        </span>
+      </a>
+      <div class="acoes">
+        <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+        <button class="principal compacta" type="button" onclick="irParaCadastro()">Cadastre-se</button>
       </div>
-    </div>
+    </header>
 
-    <form class="formulario" onsubmit="enviar(event)">
-      <p id="interesse-aviso" class="detalhe" hidden></p>
+    <main>
+      <section class="wrap heroi">
+        <div class="etiquetas">
+          <span>Concessionária inteligente</span>
+          <span>Estoque real, hoje</span>
+        </div>
 
-      <label for="nome">Seu nome</label>
-      <input id="nome" name="nome" autocomplete="given-name" maxlength="80" required
-        placeholder="Como a Aurora te chama?" />
+        <!-- Chamada da S-01 §1.2, inteira: o gradiente separa a linha, não o texto. -->
+        <h1>
+          <span class="gradiente">Descubra qual elétrico</span>
+          <span class="solida">combina com a sua rotina.</span>
+        </h1>
+        <p>Em 3 minutos, conversando — com preço e disponibilidade reais, não tabela desatualizada.</p>
 
-      <label for="telefone">Seu WhatsApp</label>
-      <input id="telefone" name="telefone" type="tel" inputmode="tel" autocomplete="tel"
-        maxlength="15" required placeholder="(00) 00000-0000" />
+        <!-- ponytail: os quatro do protótipo levam ao cadastro por enquanto. Ofertas e test
+             drive ganham destino próprio quando a S-04 e a S-07 existirem. -->
+        <div class="botoes">
+          <button class="principal compacta" type="button" onclick="irParaCadastro()">
+            Comece agora <span aria-hidden="true">→</span>
+          </button>
+          <button class="secundaria" type="button" onclick="irParaCadastro()">Conheça os modelos</button>
+          <button class="secundaria" type="button" onclick="irParaCadastro()">Conheça as ofertas</button>
+          <button class="secundaria" type="button" onclick="irParaCadastro()">Confira com um test-drive</button>
+        </div>
+      </section>
 
-      <p class="aviso-erro" id="erro" role="alert"></p>
+      <section class="wrap chamada" id="cadastro">
+        <div>
+          <!-- Texto exato do ADR-010 §1. Mudar aqui é mudar a decisão: abra um ADR novo. -->
+          <div class="aurora">
+            <strong>Oi! Sou a Aurora, consultora da Sol &amp; Volt.</strong>
+            Me diz seu nome e WhatsApp que eu já te mostro o que temos na loja hoje — com preço e
+            disponibilidade real, não tabela desatualizada.
+            <em>Seu contato fica só aqui com a gente. Se pedir, eu apago.</em>
+          </div>
+        </div>
 
-      <button class="principal" type="submit">Conversar com a Aurora</button>
-      <a class="saida-pelo-lado" href="/catalogo">prefiro só olhar os carros</a>
-    </form>
-  </main>
+        <form class="formulario" onsubmit="enviar(event)">
+          <p id="interesse-aviso" class="detalhe" hidden></p>
 
-  <footer class="wrap rodape">
-    <span>Guardamos só seu nome e WhatsApp. Se pedir, apagamos.</span>
-    <span>Sol &amp; Volt Veículos Elétricos · Tambaú, João Pessoa</span>
-  </footer>
+          <label for="nome">Seu nome</label>
+          <input id="nome" name="nome" autocomplete="given-name" maxlength="80" required
+            placeholder="Como a Aurora te chama?" />
+
+          <label for="telefone">Seu WhatsApp</label>
+          <input id="telefone" name="telefone" type="tel" inputmode="tel" autocomplete="tel"
+            maxlength="15" required placeholder="(00) 00000-0000" />
+
+          <p class="aviso-erro" id="erro" role="alert"></p>
+
+          <button class="principal" type="submit">Conversar com a Aurora</button>
+          <a class="saida-pelo-lado" href="/catalogo">prefiro só olhar os carros</a>
+        </form>
+      </section>
+    </main>
+
+    <footer class="wrap rodape">
+      <span class="privacidade">Guardamos só seu nome e WhatsApp. Se pedir, apagamos.</span>
+      <span>VLADETEC © 2026 - <strong>EV-Sales</strong>. Tecnologia e Inteligência na Mobilidade
+        que inspira.</span>
+      <span>Feito para quem pensa no amanhã.</span>
+    </footer>
+  </div>
 
   <script src="/static/tema.js"></script>
   <script>
@@ -70,6 +108,11 @@
         this.value = d;
       }
     });
+
+    function irParaCadastro() {
+      document.getElementById("cadastro").scrollIntoView({ behavior: "smooth" });
+      setTimeout(function () { document.getElementById("nome").focus(); }, 500);
+    }
 
     var parametros = new URLSearchParams(location.search);
     // S-02 §6: sessão expirada volta pra cá. O lead é reconhecido pelo telefone_hash.
@@ -104,7 +147,6 @@
 
       if (resposta.ok) {
         var criado = await resposta.json();
-        // S-02 monta o chat. Até lá, a conversa existe e o cookie de sessão está posto.
         location.href = "/conversas/" + criado.conversa_id;
         return;
       }

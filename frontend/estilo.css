@@ -121,6 +121,9 @@ input:focus-visible { border-color: #4d8dff; box-shadow: 0 0 0 3px var(--glow); 
   color: var(--muted); font-size: .78rem; display: flex; justify-content: space-between;
   flex-wrap: wrap; gap: 8px;
 }
+/* S-01 §1.6 continua em linha própria; a assinatura da casa fica na de baixo. */
+.rodape .privacidade { flex-basis: 100%; text-align: center; padding-bottom: 10px; }
+.rodape strong { color: var(--ink); }
 
 /* Desktop é a exceção: só aqui a chamada vira duas colunas e o texto cresce. */
 @media (min-width: 860px) {
@@ -187,4 +190,62 @@ input:focus-visible { border-color: #4d8dff; box-shadow: 0 0 0 3px var(--glow); 
 .oculto {
   position: absolute; width: 1px; height: 1px; overflow: hidden;
   clip-path: inset(50%); white-space: nowrap;
+}
+
+
+/* ── Identidade do protótipo: fundo, herói e botões ──────────────────────────── */
+
+.pagina { position: relative; isolation: isolate; min-height: 100vh; overflow-x: hidden; }
+.pagina::before, .pagina::after {
+  content: ""; position: absolute; z-index: -2; pointer-events: none;
+  border-radius: 999px; filter: blur(55px); opacity: .35;
+}
+.pagina::before { width: 480px; height: 480px; left: 3%; top: 12%; background: #1259d1; }
+.pagina::after { width: 420px; height: 420px; right: 0; top: 22%; background: #923a19; opacity: .27; }
+[data-theme="light"] .pagina::before { opacity: .15; background: #3f83ff; }
+[data-theme="light"] .pagina::after { opacity: .10; background: #ff8a5c; }
+
+.grade {
+  position: absolute; inset: 0; z-index: -3; opacity: .2;
+  background-image:
+    linear-gradient(rgba(115, 153, 221, .1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(115, 153, 221, .1) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: linear-gradient(to bottom, black, transparent 75%);
+}
+[data-theme="light"] .grade { opacity: .08; }
+
+.heroi { text-align: center; padding: 34px 0 10px; }
+.etiquetas { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+.etiquetas span {
+  padding: 5px 12px; border: 1px solid var(--line); border-radius: 20px;
+  background: var(--bg-secondary); color: var(--muted); font-size: .7rem; letter-spacing: .02em;
+}
+
+.heroi h1 {
+  font-size: clamp(34px, 8vw, 74px); line-height: 1.05; letter-spacing: -.06em;
+  margin: 0 auto 18px; font-weight: 800; max-width: 860px;
+}
+.heroi h1 .gradiente {
+  background: linear-gradient(100deg, #3c80ff 5%, #9f83ff 55%, #ff9c68 94%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.heroi h1 .solida { display: block; color: var(--ink); }
+.heroi p {
+  max-width: 620px; margin: 0 auto 28px; color: var(--muted); line-height: 1.7;
+  font-size: clamp(.92rem, 1.4vw, 1.12rem);
+}
+
+.botoes { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.principal.compacta { width: auto; padding: 15px 26px; font-size: .9rem; }
+.nav .principal.compacta { padding: 10px 18px; font-size: .78rem; }
+.secundaria {
+  padding: 15px 22px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg-secondary); color: var(--ink); font: inherit; font-weight: 600;
+  font-size: .85rem; cursor: pointer;
+}
+.secundaria:hover { border-color: var(--cyan); }
+
+@media (min-width: 860px) {
+  .heroi { padding: 52px 0 18px; }
 }

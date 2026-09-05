@@ -59,6 +59,8 @@
       var elemento = document.createElement("div");
       elemento.className = "bolha " + (autor === "cliente" ? "minha" : "dela");
       if (autor !== "cliente") {
+        // S-02 §5: a Aurora tem avatar e nome visível. O avatar é a inicial, no ::before.
+        elemento.dataset.inicial = autor === "aurora" ? "A" : "SV";
         var nome = document.createElement("b");
         nome.textContent = autor === "aurora" ? "Aurora" : "Sol & Volt";
         elemento.appendChild(nome);

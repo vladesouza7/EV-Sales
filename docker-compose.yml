@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: evsales
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-evsales}
+      POSTGRES_DB: evsales
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/criar-banco-de-teste.sql:/docker-entrypoint-initdb.d/10-teste.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evsales"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      EVSALES_DATABASE_URL: postgresql+psycopg://evsales:${POSTGRES_PASSWORD:-evsales}@postgres:5432/evsales
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports: ["8000:8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

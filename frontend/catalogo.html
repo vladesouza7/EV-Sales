@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Estoque de hoje — Sol &amp; Volt Veículos Elétricos</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+</head>
+
+<body>
+  <header class="wrap nav">
+    <a class="marca" href="/">
+      <span class="marca-simbolo">⚡</span>
+      <span>
+        <b>Sol &amp; Volt Veículos Elétricos</b>
+        <small>Tambaú, João Pessoa</small>
+      </span>
+    </a>
+    <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+  </header>
+
+  <main class="wrap">
+    <h1>O que está na loja hoje</h1>
+    <p class="detalhe">Preço e disponibilidade lidos do estoque agora, não de tabela.</p>
+    <div class="carros" id="carros" aria-live="polite"></div>
+  </main>
+
+  <footer class="wrap rodape">
+    <span>Guardamos só seu nome e WhatsApp. Se pedir, apagamos.</span>
+    <span>Sol &amp; Volt Veículos Elétricos · Tambaú, João Pessoa</span>
+  </footer>
+
+  <script src="/static/tema.js"></script>
+  <script>
+    var real = new Intl.NumberFormat("pt-BR", {
+      style: "currency", currency: "BRL", maximumFractionDigits: 0
+    });
+
+    function autonomia(carro) {
+      // ADR-003: sem fonte confirmada não se estima, e a fonte nunca fica implícita.
+      if (carro.autonomia_km === null) return "autonomia: vou confirmar com a loja";
+      return carro.autonomia_km + " km — " + carro.autonomia_fonte;
+    }
+
+    function versao(carro) {
+      var partes = [carro.versao, carro.ano, carro.cor, carro.condicao];
+      if (carro.condicao === "seminovo") partes.push(carro.km.toLocaleString("pt-BR") + " km");
+      return partes.join(" · ");
+    }
+
+    function cartao(carro) {
+      var no = document.createElement("article");
+      no.className = "carro";
+
+      var foto = document.createElement("img");
+      foto.alt = "";
+      foto.src = carro.foto_url || "/static/sem-foto.svg";
+
+      var corpo = document.createElement("div");
+      corpo.className = "corpo";
+      corpo.appendChild(linha("h2", "", carro.marca + " " + carro.modelo));
+      corpo.appendChild(linha("span", "detalhe", versao(carro)));
+      corpo.appendChild(linha("span", "detalhe", autonomia(carro)));
+      corpo.appendChild(linha("span", "preco", real.format(carro.preco_centavos / 100)));
+
+      var conversar = document.createElement("a");
+      conversar.className = "principal";
+      conversar.href = "/?interesse=" + encodeURIComponent(carro.chassi);
+      conversar.textContent = "falar com a Aurora sobre este";
+      corpo.appendChild(conversar);
+
+      no.appendChild(foto);
+      no.appendChild(corpo);
+      return no;
+    }
+
+    function linha(tag, classe, texto) {
+      var no = document.createElement(tag);
+      if (classe) no.className = classe;
+      no.textContent = texto;
+      return no;
+    }
+
+    fetch("/api/catalogo").then(function (r) { return r.json(); }).then(function (carros) {
+      var lista = document.getElementById("carros");
+      if (!carros.length) {
+        lista.textContent = "Nenhuma unidade disponível agora.";
+        return;
+      }
+      carros.forEach(function (carro) { lista.appendChild(cartao(carro)); });
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,34 @@
+[project]
+name = "ev-sales"
+version = "0.1.0"
+description = "Aurora, consultora da Sol & Volt"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.14",
+    "cryptography>=44.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "httpx2>=0.29", "ruff>=0.8", "mypy>=1.13"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Migration é saída de gerador: o Alembic escreve os CHECK numa linha só.
+"migrations/versions/*.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

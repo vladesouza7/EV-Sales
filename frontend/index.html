@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sol &amp; Volt Veículos Elétricos — converse com a Aurora</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+</head>
+
+<body>
+  <header class="wrap nav">
+    <a class="marca" href="/">
+      <span class="marca-simbolo">⚡</span>
+      <span>
+        <b>Sol &amp; Volt Veículos Elétricos</b>
+        <small>Tambaú, João Pessoa</small>
+      </span>
+    </a>
+    <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+  </header>
+
+  <main class="wrap chamada">
+    <div>
+      <h1>Descubra qual elétrico combina com a sua rotina — em 3 minutos, conversando.</h1>
+      <!-- Texto exato do ADR-010 §1. Mudar aqui é mudar a decisão: abra um ADR novo. -->
+      <div class="aurora">
+        <strong>Oi! Sou a Aurora, consultora da Sol &amp; Volt.</strong>
+        Me diz seu nome e WhatsApp que eu já te mostro o que temos na loja hoje — com preço e
+        disponibilidade real, não tabela desatualizada.
+        <em>Seu contato fica só aqui com a gente. Se pedir, eu apago.</em>
+      </div>
+    </div>
+
+    <form class="formulario" onsubmit="enviar(event)">
+      <p id="interesse-aviso" class="detalhe" hidden></p>
+
+      <label for="nome">Seu nome</label>
+      <input id="nome" name="nome" autocomplete="given-name" maxlength="80" required
+        placeholder="Como a Aurora te chama?" />
+
+      <label for="telefone">Seu WhatsApp</label>
+      <input id="telefone" name="telefone" type="tel" inputmode="tel" autocomplete="tel"
+        maxlength="15" required placeholder="(00) 00000-0000" />
+
+      <p class="aviso-erro" id="erro" role="alert" aria-live="polite"></p>
+
+      <button class="principal" type="submit">Conversar com a Aurora</button>
+      <a class="saida-pelo-lado" href="/catalogo">prefiro só olhar os carros</a>
+    </form>
+  </main>
+
+  <footer class="wrap rodape">
+    <span>Guardamos só seu nome e WhatsApp. Se pedir, apagamos.</span>
+    <span>Sol &amp; Volt Veículos Elétricos · Tambaú, João Pessoa</span>
+  </footer>
+
+  <script src="/static/tema.js"></script>
+  <script>
+    var telefone = document.getElementById("telefone");
+    telefone.addEventListener("input", function () {
+      var d = this.value.replace(/\D/g, "").slice(0, 11);
+      if (d.length > 6) {
+        this.value = "(" + d.slice(0, 2) + ") " + d.slice(2, 7) + "-" + d.slice(7);
+      } else if (d.length > 2) {
+        this.value = "(" + d.slice(0, 2) + ") " + d.slice(2);
+      } else {
+        this.value = d;
+      }
+    });
+
+    var interesse = new URLSearchParams(location.search).get("interesse");
+    if (interesse) {
+      var aviso = document.getElementById("interesse-aviso");
+      aviso.textContent = "A Aurora já vai abrir a conversa sobre o chassi " + interesse + ".";
+      aviso.hidden = false;
+    }
+
+    async function enviar(evento) {
+      evento.preventDefault();
+      var erro = document.getElementById("erro");
+      erro.textContent = "";
+
+      var resposta = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome: document.getElementById("nome").value,
+          telefone: telefone.value,
+          origem: interesse ? "catalogo" : "landing"
+        })
+      });
+
+      if (resposta.ok) {
+        var criado = await resposta.json();
+        // S-02 monta o chat. Até lá, a conversa existe e o cookie de sessão está posto.
+        location.href = "/conversas/" + criado.conversa_id;
+        return;
+      }
+      erro.textContent = await mensagemDeErro(resposta);
+    }
+
+    async function mensagemDeErro(resposta) {
+      var corpo = await resposta.json().catch(function () { return null; });
+      var detalhe = corpo && corpo.detail;
+      if (typeof detalhe === "string") return detalhe;
+      if (detalhe && detalhe.mensagem) return detalhe.mensagem;
+      if (Array.isArray(detalhe) && detalhe.length) {
+        return detalhe[0].msg.replace(/^Value error, /, "");
+      }
+      return "Não consegui enviar agora. Tenta de novo?";
+    }
+  </script>
+</body>
+
+</html>

@@ -51,7 +51,10 @@ PROVEDOR_PADRAO = "openrouter"
 class Preset:
     """Tudo o que difere entre provedores. Se algo não está aqui, não difere."""
 
-    url: str
+    # A **base** compatível com OpenAI, como o provedor documenta — sem
+    # `/chat/completions`. Todo provedor publica a base; fazer o `.env` carregar o
+    # caminho completo seria pedir para quem configura lembrar de um detalhe nosso.
+    base: str
     # ADR-012: provedor entra com a política lida e escrita, nunca por omissão. Um teste
     # exige que este campo esteja preenchido em todo preset.
     politica_de_dados: str
@@ -63,7 +66,7 @@ class Preset:
 
 PRESETS: dict[str, Preset] = {
     "openrouter": Preset(
-        url="https://openrouter.ai/api/v1/chat/completions",
+        base="https://openrouter.ai/api/v1",
         politica_de_dados=(
             "Roteamento restrito a provedores com retenção zero e sem treino sobre os dados."
         ),
@@ -75,20 +78,20 @@ PRESETS: dict[str, Preset] = {
         cabecalhos={"X-Title": "EV-Sales — Sol & Volt"},
     ),
     "ollama": Preset(
-        url="http://localhost:11434/v1/chat/completions",
+        base="http://localhost:11434/v1",
         politica_de_dados="A conversa não sai da máquina da loja. Elimina a superfície do ADR-007.",
         exige_chave=False,
     ),
     "gemini": Preset(
-        url="https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        base="https://generativelanguage.googleapis.com/v1beta/openai",
         politica_de_dados="Sujeita aos termos do Google. Verificar antes de produção com cliente.",
     ),
     "nvidia": Preset(
-        url="https://integrate.api.nvidia.com/v1/chat/completions",
+        base="https://integrate.api.nvidia.com/v1",
         politica_de_dados="Sujeita aos termos da NVIDIA. Verificar antes de produção com cliente.",
     ),
     "compativel": Preset(
-        url="",  # vem de EVSALES_LLM_URL; sem ela o provedor não sobe
+        base="",  # vem de EVSALES_LLM_URL; sem ela o provedor não sobe
         politica_de_dados="Depende de para onde a URL aponta. Verificar antes de produção.",
         exige_chave=False,
     ),
@@ -96,7 +99,7 @@ PRESETS: dict[str, Preset] = {
 
 # Nome fora da tabela não cai no padrão: mandar a conversa para fora da loja por causa de
 # um erro de digitação no `.env` não é degradação, é vazamento.
-_DESCONHECIDO = Preset(url="", politica_de_dados="")
+_DESCONHECIDO = Preset(base="", politica_de_dados="")
 
 
 @dataclass(frozen=True)
@@ -131,6 +134,17 @@ class ProvedorIndisponivel(RuntimeError):
     """O provedor não respondeu. Quem chama degrada para humano, não inventa resposta."""
 
 
+def _endpoint(base: str) -> str:
+    """`https://ollama.com/v1` vira `https://ollama.com/v1/chat/completions`.
+
+    Aceita o caminho completo também, porque alguém vai colar o completo — mas o formato
+    documentado é a base, que é o que todo provedor publica.
+    """
+    if not base:
+        return ""
+    return base if base.endswith("/chat/completions") else f"{base}/chat/completions"
+
+
 def _dolar_em_micro_reais() -> int:
     """Câmbio fixado no `.env`, revisado por commit.
 
@@ -158,7 +172,8 @@ class ProvedorCompativel:
             m.strip() for m in os.environ.get(VARIAVEL_FALLBACKS, "").split(",") if m.strip()
         ]
         # A URL do `.env` vence o preset: é como o Ollama roda com outro host no compose.
-        self.url = os.environ.get(VARIAVEL_URL, "") or self.preset.url
+        self.base = (os.environ.get(VARIAVEL_URL, "") or self.preset.base).rstrip("/")
+        self.url = _endpoint(self.base)
 
     def configurado(self) -> bool:
         if not self.conhecido:

@@ -76,7 +76,7 @@ def test_compativel_aponta_para_a_url_que_o_env_disser(monkeypatch: pytest.Monke
         monkeypatch,
         EVSALES_PROVEDOR="compativel",
         EVSALES_MODELO="m",
-        EVSALES_LLM_URL="http://gpu.solevolt.local:8000/v1/chat/completions",
+        EVSALES_LLM_URL="http://gpu.solevolt.local:8000/v1",
     )
 
     assert provedor.configurado()
@@ -135,3 +135,23 @@ def test_o_fallback_entre_fabricantes_e_campo_do_payload(monkeypatch: pytest.Mon
 
     assert corpo["models"] == ["a/1", "b/2", "c/3"]
     assert json.dumps(corpo)
+
+
+def test_a_url_do_env_e_a_base_e_o_caminho_completo_tambem_serve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Todo provedor documenta a base. Colar o caminho completo também funciona."""
+    base = _configurar(
+        monkeypatch,
+        EVSALES_PROVEDOR="compativel",
+        EVSALES_MODELO="m",
+        EVSALES_LLM_URL="https://ollama.com/v1",
+    )
+    completo = _configurar(
+        monkeypatch,
+        EVSALES_PROVEDOR="compativel",
+        EVSALES_MODELO="m",
+        EVSALES_LLM_URL="https://ollama.com/v1/chat/completions",
+    )
+
+    assert base.url == completo.url == "https://ollama.com/v1/chat/completions"

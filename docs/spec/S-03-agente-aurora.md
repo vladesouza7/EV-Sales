@@ -160,7 +160,12 @@ Roda em **todo turno**, antes de a mensagem chegar ao cliente ([S-02 §3](S-02-c
 1. Igual a um valor devolvido por uma tool **neste turno**;
 2. Igual a um valor devolvido por uma tool em turno anterior **e ainda válido** (o chassi não mudou
    de status, o preço não mudou);
-3. Presente na mensagem do próprio cliente neste turno (ele disse "tenho 150 mil");
+3. Presente em alguma mensagem do próprio cliente **nesta conversa** (ele disse "tenho 150
+   mil", ou "rodo 40 km por dia" três turnos atrás). A janela era o turno, e foi alargada
+   depois de uma conversa real: a Aurora repetiu o "40 km por dia" que a cliente tinha
+   informado e levou handoff por número divergente — bloqueada justamente por fazer o que o
+   [CASE](../CASE.md#o-jeito-da-aurora) pede, traduzir especificação em rotina. Preço e
+   autonomia expiram; o que o cliente contou sobre a rotina dele, não;
 4. Arredondamento **para baixo** de um valor de tool, com marcador de aproximação — "mais de 370 km"
    para 372 é válido; "cerca de 400 km" para 372 **não é**;
 5. Número não-comercial: hora ("14h"), quantidade de portas, ano do modelo.

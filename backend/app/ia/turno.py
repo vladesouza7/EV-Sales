@@ -48,7 +48,11 @@ MAX_REGENERACOES = 1
 MENSAGENS_DE_HISTORICO = 20
 # S-03 §3 — no máximo 2 perguntas antes da primeira recomendação. A regra é de código:
 # no prompt ela dependeria de o modelo saber contar as próprias perguntas.
-MAX_MENSAGENS_EM_QUALIFICACAO = 3
+#
+# São 2 e não 3 porque a transição roda no FIM do turno: com 3, a Aurora perguntava na
+# saudação, no turno 2 e no turno 3, e só recomendava no 4 — três perguntas. A persona 1
+# abandona interrogatório, e ela abandona antes de chegar ao quarto turno.
+MAX_MENSAGENS_EM_QUALIFICACAO = 2
 
 PEDIDO_DESCULPA = (
     "Deixa eu chamar um dos nossos consultores pra te responder isso com precisão. "
@@ -117,20 +121,40 @@ def _do_cliente(conteudo: str) -> str:
     return f"<mensagem_do_cliente>\n{redigir(conteudo)}\n</mensagem_do_cliente>"
 
 
-def _historico(sessao: Session, conversa: Conversa) -> list[dict[str, object]]:
-    anteriores = sessao.scalars(
+def _anteriores(sessao: Session, conversa: Conversa) -> list[Mensagem]:
+    recentes = sessao.scalars(
         select(Mensagem)
         .where(Mensagem.conversa_id == conversa.id, Mensagem.processada_em.isnot(None))
         .order_by(Mensagem.criada_em.desc(), Mensagem.id)
         .limit(MENSAGENS_DE_HISTORICO)
     ).all()
+    return list(reversed(recentes))
+
+
+def _historico(anteriores: list[Mensagem]) -> list[dict[str, object]]:
     return [
         {
             "role": "assistant" if m.direcao == "saida" else "user",
             "content": m.conteudo if m.direcao == "saida" else _do_cliente(m.conteudo),
         }
-        for m in reversed(anteriores)
+        for m in anteriores
     ]
+
+
+def _falas_do_cliente(anteriores: list[Mensagem], entrada: Mensagem) -> str:
+    """S-03 §4, condição 3 — e ela vale para a conversa inteira, não só para o turno.
+
+    A spec dizia "neste turno". Numa conversa real isso reprova a Aurora justamente
+    quando ela faz o que o CASE pede: a cliente disse "40 km por dia" no turno 2, a
+    Aurora repetiu "40 km por dia" no turno 4 para traduzir a especificação em rotina, e
+    a verificação bloqueou um número que **a própria cliente tinha fornecido**.
+
+    Preço e autonomia expiram — o chassi muda de status, o preço muda. O que o cliente
+    contou sobre a rotina dele não expira, e não há como a Aurora inventar o que ele
+    mesmo falou. Por isso a janela aqui é a conversa, e não o turno.
+    """
+    falas = [m.conteudo for m in anteriores if m.direcao == "entrada"]
+    return " ".join([*falas, entrada.conteudo])
 
 
 def _modelo_citado(sessao: Session, texto: str) -> bool:
@@ -256,9 +280,11 @@ async def executar_turno(
     _etapa_antes_do_turno(sessao, conversa, entrada)
     etapa_do_turno = conversa.etapa
 
+    anteriores = _anteriores(sessao, conversa)
+    do_cliente = _falas_do_cliente(anteriores, entrada)
     mensagens: list[dict[str, object]] = [
         {"role": "system", "content": _sistema(sessao, conversa)},
-        *_historico(sessao, conversa),
+        *_historico(anteriores),
         {"role": "user", "content": _do_cliente(entrada.conteudo)},
     ]
     fichas: list[dict[str, object]] = []
@@ -326,6 +352,30 @@ async def executar_turno(
             )
             yield "tool_fim", {"nome": chamada.nome, "resumo": _resumo(chamada.nome, resultado)}
 
+        if conversa.modo != "aurora":
+            # `transferir_para_humano` rodou. O turno acaba **aqui**, com frase nossa.
+            #
+            # Continuar o loop era pedir mais uma fala a quem já saiu da conversa — e foi
+            # assim que o retorno da tool, em JSON cru, chegou ao cliente: sem tool na mesa
+            # e sem nada a dizer, o modelo ecoou o próprio resultado da tool como resposta.
+            # Em modo humano a Aurora não responde (S-02 §2), e isso vale para o turno em
+            # que ela sai, não só para os seguintes.
+            saida = _gravar_saida(sessao, conversa, entrada, PEDIDO_DESCULPA, da_ia=False)
+            registrar(
+                sessao,
+                conversa.id,
+                "evento",
+                "transferido_para_humano",
+                dados={"etapa": etapa_do_turno},
+                duracao_ms=_ms(comeco),
+                custo_micro_reais=custo,
+                custo_faturado=resposta.custo_faturado,
+            )
+            for pedaco in _fatiar(PEDIDO_DESCULPA):
+                yield "token", {"texto": pedaco}
+            yield "mensagem_fim", {"mensagem_id": str(saida.id), "etapa": conversa.etapa}
+            return
+
     if not texto.strip():
         # S-03 §6 — estourou o teto de tool calls, ou o modelo devolveu só chamada e
         # nenhuma prosa. Uma última passada sem tools encerra o turno com o que tem,
@@ -345,7 +395,7 @@ async def executar_turno(
         return
 
     permitidos = permitidos_de(fichas)
-    veredito = verificar_numeros(texto, permitidos, entrada.conteudo)
+    veredito = verificar_numeros(texto, permitidos, do_cliente)
     tentativas = 0
 
     while not veredito.aprovado and tentativas < MAX_REGENERACOES:
@@ -369,7 +419,7 @@ async def executar_turno(
             return
         custo += resposta.custo_micro_reais
         texto = resposta.texto
-        veredito = verificar_numeros(texto, permitidos, entrada.conteudo)
+        veredito = verificar_numeros(texto, permitidos, do_cliente)
 
     registrar(
         sessao,

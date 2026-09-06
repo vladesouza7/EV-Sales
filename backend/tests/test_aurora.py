@@ -268,3 +268,66 @@ def test_provedor_que_nao_fatura_grava_custo_desconhecido_e_avisa(
     ).all()
     assert len(avisos) == 1
     assert avisos[0].gravidade == "baixa"
+
+
+def test_retorno_de_tool_nunca_chega_ao_cliente_como_fala_da_aurora(
+    cliente: TestClient, sessao: Session, provedor: ProvedorDuble
+) -> None:
+    """O turno em que ela sai também é turno em que ela não responde (S-02 §2).
+
+    Regressão de um caso real: depois de `transferir_para_humano`, o modelo ficou sem
+    tool e sem nada a dizer, e ecoou o JSON do retorno da tool como se fosse a resposta.
+    """
+    conversa_id = _conversa_em(cliente, sessao, "qualificacao")
+    provedor.chamar_tool("transferir_para_humano", motivo="cliente pediu desconto")
+    provedor.responder('{"modo":"humano","etapa":"humano","motivo":"cliente pediu desconto"}')
+
+    cliente.post(f"/api/conversas/{conversa_id}/mensagens", json={"conteudo": "me da 30%?"})
+    eventos = _turno(sessao, conversa_id)
+
+    entregue = _texto(eventos)
+    assert '"modo"' not in entregue and "humano" not in entregue
+    assert "consultores" in entregue
+    sessao.expire_all()
+    gravadas = sessao.scalars(
+        select(Mensagem).where(Mensagem.conversa_id == conversa_id, Mensagem.direcao == "saida")
+    ).all()
+    assert len(gravadas) == 1 and gravadas[0].gerada_por_ia is False
+
+
+def test_no_maximo_duas_perguntas_antes_da_primeira_recomendacao(
+    cliente: TestClient, sessao: Session, provedor: ProvedorDuble
+) -> None:
+    """S-03 §3 — a persona 1 abandona interrogatório."""
+    conversa_id = _conversa_em(cliente, sessao, "saudacao")
+    etapas = []
+    for texto in ("oi", "uso na cidade", "Joao Pessoa"):
+        provedor.responder("E me conta mais uma coisa?")
+        cliente.post(f"/api/conversas/{conversa_id}/mensagens", json={"conteudo": texto})
+        _turno(sessao, conversa_id)
+        sessao.expire_all()
+        conversa = sessao.get(Conversa, conversa_id)
+        assert conversa is not None
+        etapas.append(conversa.etapa)
+
+    # Duas perguntas (saudação e turno 2) e a terceira mensagem já é recomendação.
+    assert etapas == ["qualificacao", "recomendacao", "recomendacao"]
+
+
+def test_numero_que_o_cliente_deu_antes_continua_valendo(
+    cliente: TestClient, sessao: Session, provedor: ProvedorDuble
+) -> None:
+    """Regressão de um caso real: a cliente disse "40 km por dia" no turno 1 e a Aurora
+    foi bloqueada ao repetir isso no turno 2, que é exatamente o que o CASE pede dela."""
+    conversa_id = _conversa_em(cliente, sessao, "qualificacao")
+    provedor.responder("Entendi! Você tem carregador em casa?")
+    provedor.responder("Com 40 km por dia, você carrega uma vez por semana.")
+
+    for texto in ("rodo uns 40 km por dia", "tenho carregador sim"):
+        cliente.post(f"/api/conversas/{conversa_id}/mensagens", json={"conteudo": texto})
+        eventos = _turno(sessao, conversa_id)
+
+    assert "40 km por dia" in _texto(eventos)
+    sessao.expire_all()
+    conversa = sessao.get(Conversa, conversa_id)
+    assert conversa is not None and conversa.modo == "aurora"

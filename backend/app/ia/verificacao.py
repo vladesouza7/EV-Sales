@@ -163,7 +163,8 @@ def _confere(numero: Numero, permitidos: set[tuple[str, float]]) -> bool:
 
 def verificar(texto: str, permitidos: set[tuple[str, float]], do_cliente: str = "") -> Veredito:
     """Passos 2 e 3 da §4. Aprovado é tudo conferir; um divergente reprova a mensagem."""
-    # Condição 3: o que o próprio cliente escreveu neste turno não é número inventado.
+    # Condição 3: o que o próprio cliente escreveu **nesta conversa** não é número
+    # inventado. A janela é a conversa e não o turno — ver `_falas_do_cliente`.
     permitidos = permitidos | {(n.unidade, n.valor) for n in extrair(do_cliente)}
 
     extraidos = extrair(texto)

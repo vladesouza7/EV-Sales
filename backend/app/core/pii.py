@@ -74,7 +74,12 @@ _TELEFONE = "|".join(
         r"\b\d{2}[\s.\-]9[\s.\-]?\d{4}[\s.\-]?\d{4}\b",  # DDD solto + nono dígito
         r"\b\d{2}9\d{8}\b",  # 11 dígitos colados
         r"\b9[\s.\-]?\d{4}[\s.\-]?\d{4}\b",  # celular sem DDD, como se escreve na cidade
-        r"\b[2-5]\d{3}[\s.\-]\d{4}\b",  # fixo sem DDD
+        # Fixo sem DDD. O `(?<![\w-])` no lugar de `\b` e uma restricao, nunca um
+        # afrouxamento: ele so deixa de casar quando vem um hifen imediatamente antes,
+        # e telefone precedido de hifen nao existe. Sem isso, o numero do Espelho
+        # (`SV-2026-0001`) era lido como "2026-0001", e o Rai via na tela dele
+        # "espelho SV-[TELEFONE-REMOVIDO]". Qualquer codigo NNNN-NNNN caia igual.
+        r"(?<![\w-])[2-5]\d{3}[\s.\-]\d{4}\b",  # fixo sem DDD
     )
 )
 

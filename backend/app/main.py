@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.aprovacao import router as rotas_de_aprovacao
 from app.arquivos import NomeInvalido, caminho_da_foto, ler
+from app.atendimentos import router as rotas_de_atendimento
 from app.autenticacao import Autenticado
 from app.autenticacao import router as rotas_de_autenticacao
 from app.conversas import router as rotas_de_conversa
@@ -37,6 +38,7 @@ app = FastAPI(title="EV-Sales — Sol & Volt")
 app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 app.include_router(rotas_de_autenticacao)
 app.include_router(rotas_de_aprovacao)
+app.include_router(rotas_de_atendimento)
 app.include_router(rotas_de_conversa)
 app.include_router(rotas_de_test_drive)
 
@@ -152,6 +154,16 @@ def saude_das_dependencias(sessao: BancoDeDados, resposta: Response) -> dict[str
         resposta.status_code = 503
         return {**estado, "postgres": "indisponivel"}
     return {**estado, "postgres": "ok"}
+
+
+@app.get("/atendimentos", include_in_schema=False)
+def pagina_de_atendimentos() -> FileResponse:
+    return FileResponse(FRONTEND / "atendimentos.html")
+
+
+@app.get("/custo", include_in_schema=False)
+def pagina_de_custo() -> FileResponse:
+    return FileResponse(FRONTEND / "custo.html")
 
 
 @app.get("/entrar", include_in_schema=False)

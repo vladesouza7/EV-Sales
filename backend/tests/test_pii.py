@@ -119,3 +119,20 @@ class TestDescuidoMaisComum:
         assert "Tarcísio N." in texto
         assert "988714471" not in texto
         assert "Nóbrega" not in texto
+
+
+def test_fixo_sem_ddd_continua_sendo_redigido() -> None:
+    """A restrição do olhar-atrás não pode ter aberto buraco no que já protegia."""
+    for texto in (
+        "me liga no 3244-1010",
+        "3244-1010",
+        "loja: 3244 1010, falar com o Raí",
+        "(83) 3244-1010",
+    ):
+        assert "3244" not in redigir(texto), texto
+
+
+def test_numero_de_documento_nao_e_confundido_com_telefone() -> None:
+    """Regressão de um caso real: o Raí lia "espelho SV-[TELEFONE-REMOVIDO]" na tela."""
+    assert redigir("espelho SV-2026-0001 emitido") == "espelho SV-2026-0001 emitido"
+    assert redigir("chassi 9BWZZZ377VT004471") == "chassi 9BWZZZ377VT004471"

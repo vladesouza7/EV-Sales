@@ -47,7 +47,7 @@ delegada a quem implementa, e autenticação não é decisão para delegar.
 | [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ◐ parcial — a operação e o portão sim; a rotina periódica não | ✅ concorrência — **existe** |
 | [S-06](S-06-handoff-whatsapp.md) | Handoff WhatsApp | Token, webhook, continuidade | ✗ não começada | |
 | [S-07](S-07-test-drive.md) | Test drive | Agenda real, dossiê do vendedor, **desfecho** | ◐ parcial — agenda sim; §6, §8 e §9 não | |
-| [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo e teto sim; as duas telas não | |
+| [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo, teto e as duas telas sim; Langfuse não | |
 | [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem e máscara sim; retenção não | ✅ varredura de logs |
 | [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose e seed sim; backup, runbook e CI não | |
 | [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ◐ parcial — login, sessão e perfis sim; as telas são da S-04 e da S-08 | |

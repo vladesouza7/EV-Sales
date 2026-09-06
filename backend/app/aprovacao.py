@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.arquivos import PREFIXO_DOCUMENTOS, garantir_bucket, guardar
 from app.autenticacao import exige_perfil
-from app.core.pii import decifrar, mascarar_nome
+from app.core.pii import decifrar
 from app.db import agora, obter_sessao
 from app.espelho import PRAZO_DA_RESERVA, VALIDADE_DA_CONDICAO, gerar
 from app.ia.tools.estoque import detalhar_unidade
@@ -145,9 +145,18 @@ def _emitir_espelho(sessao: Session, pedido: PedidoDeAprovacao, quem_aprovou: Us
     numero = _numero_do_espelho(sessao)
     # O nome completo entra no documento do próprio cliente — é o terceiro chamador
     # autorizado de `decifrar` (S-09 §3), e o PDF vai para ele, não para um log.
+    try:
+        nome_do_cliente = decifrar(lead.nome_cifrado)
+    except Exception:
+        # Aqui o nome completo é obrigatório: é o documento do cliente. Falhar legível é
+        # melhor do que emitir um Espelho com "?" no lugar de quem está comprando.
+        raise HTTPException(
+            409, detail={"mensagem": "Não foi possível ler o cadastro do cliente."}
+        ) from None
+
     pdf = gerar(
         numero=numero,
-        nome_do_cliente=decifrar(lead.nome_cifrado),
+        nome_do_cliente=nome_do_cliente,
         unidade=unidade,
         preco_centavos=pedido.preco_centavos,
         aprovado_por=quem_aprovou.nome,
@@ -203,7 +212,7 @@ def fila(sessao: BancoDeDados, _: DonoOuGerente) -> list[dict[str, object]]:
                 "id": str(pedido.id),
                 # Nome mascarado, telefone ausente (ADR-007). A tela da decisão não
                 # precisa do telefone para decidir, então ele não sai do banco.
-                "cliente": mascarar_nome(decifrar(lead.nome_cifrado)) if lead else "?",
+                "cliente": lead.nome_mascarado() if lead else "?",
                 "veiculo": f"{unidade.marca} {unidade.modelo} {unidade.versao}" if unidade else "?",
                 "cor": unidade.cor if unidade else "?",
                 "chassi_final": pedido.chassi[-4:],

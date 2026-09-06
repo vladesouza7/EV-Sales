@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Custo do mês — Sol &amp; Volt Veículos Elétricos</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+  <script src="/static/tema.js"></script>
+</head>
+
+<body>
+  <header class="wrap nav">
+    <a class="marca" href="/custo">
+      <span class="marca-simbolo">⚡</span>
+      <span>
+        <b>Custo</b>
+        <small id="mes">carregando…</small>
+      </span>
+    </a>
+    <span class="acoes">
+      <a class="humano" href="/atendimentos">atendimentos</a>
+      <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+      <button class="humano" type="button" id="sair">sair</button>
+    </span>
+  </header>
+
+  <main class="wrap" id="tela">
+    <div class="numeros" id="numeros"></div>
+    <div class="barra"><div id="barra"></div></div>
+    <p class="detalhe" id="aviso"></p>
+    <p class="detalhe">Gasto acumulado, dia a dia</p>
+    <div class="grafico" id="grafico"></div>
+  </main>
+
+  <script>
+    function irParaLogin() {
+      location.href = "/entrar?destino=" + encodeURIComponent(location.pathname);
+    }
+
+    function cartao(rotulo, valor) {
+      var caixa = document.createElement("div");
+      caixa.className = "numero";
+      caixa.innerHTML = "<small></small><b></b>";
+      caixa.querySelector("small").textContent = rotulo;
+      caixa.querySelector("b").textContent = valor;
+      return caixa;
+    }
+
+    (async function carregar() {
+      var resposta = await fetch("/api/custo");
+      if (resposta.status === 401) { irParaLogin(); return; }
+      if (resposta.status === 404) {
+        document.getElementById("tela").innerHTML = "<p>Este acesso não alcança o custo.</p>";
+        return;
+      }
+      var dados = await resposta.json();
+      document.getElementById("mes").textContent = dados.mes;
+
+      var numeros = document.getElementById("numeros");
+      numeros.appendChild(cartao("gasto do mês", dados.gasto));
+      numeros.appendChild(cartao("teto", dados.teto));
+      numeros.appendChild(cartao("conversas", dados.conversas));
+      numeros.appendChild(cartao("média por conversa", dados.media_por_conversa));
+      numeros.appendChild(cartao("a mais cara", dados.maior_conversa));
+
+      // Verde até 60%, âmbar até 80%, vermelho acima (S-08 §5).
+      var barra = document.getElementById("barra");
+      barra.style.width = Math.min(dados.fracao_do_teto * 100, 100) + "%";
+      barra.dataset.faixa = dados.faixa;
+
+      // ADR-012: se o provedor não devolve custo faturado, a tela diz isso. R$ 0,00 com
+      // cara de verdade é o modo silencioso de o teto parar de proteger.
+      if (dados.conversas_sem_custo_faturado > 0) {
+        document.getElementById("aviso").textContent =
+          "Atenção: " + dados.conversas_sem_custo_faturado +
+          " conversa(s) deste mês vieram de um provedor que não informa o valor cobrado. " +
+          "O gasto acima não conta essas conversas, e o teto não protege enquanto for assim.";
+        document.getElementById("aviso").style.color = "var(--erro)";
+      }
+
+      var grafico = document.getElementById("grafico");
+      var maior = Math.max.apply(null, dados.acumulado_por_dia.map(function (d) {
+        return d.acumulado;
+      }).concat([1]));
+      dados.acumulado_por_dia.forEach(function (dia) {
+        var barrinha = document.createElement("span");
+        barrinha.style.height = Math.max((dia.acumulado / maior) * 100, 1) + "%";
+        barrinha.title = dia.dia;
+        grafico.appendChild(barrinha);
+      });
+      if (!dados.acumulado_por_dia.length) {
+        grafico.innerHTML = "";
+        grafico.style.height = "auto";
+        grafico.appendChild(document.createTextNode("Nenhum gasto registrado neste mês."));
+      }
+    })();
+
+    document.getElementById("sair").addEventListener("click", async function () {
+      await fetch("/api/sair", { method: "POST" });
+      location.href = "/entrar";
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atendimentos — Sol &amp; Volt Veículos Elétricos</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+  <script src="/static/tema.js"></script>
+</head>
+
+<body>
+  <header class="wrap nav">
+    <a class="marca" href="/atendimentos">
+      <span class="marca-simbolo">⚡</span>
+      <span>
+        <b>Atendimentos</b>
+        <small id="quem">carregando…</small>
+      </span>
+    </a>
+    <span class="acoes">
+      <a class="humano" href="/custo">custo</a>
+      <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+      <button class="humano" type="button" id="sair">sair</button>
+    </span>
+  </header>
+
+  <main class="wrap" id="tela">
+    <form class="busca" id="forma">
+      <input id="busca" placeholder="nome, telefone ou data (05/09/2026)" aria-label="Buscar" />
+      <button class="principal" type="submit">buscar</button>
+    </form>
+    <div class="lista-atendimentos" id="lista"></div>
+  </main>
+
+  <script>
+    var lista = document.getElementById("lista");
+
+    function irParaLogin() {
+      location.href = "/entrar?destino=" + encodeURIComponent(location.pathname + location.search);
+    }
+
+    async function pedir(caminho) {
+      var resposta = await fetch(caminho);
+      if (resposta.status === 401) { irParaLogin(); throw new Error("sem sessão"); }
+      if (resposta.status === 404) throw new Error("sem acesso");
+      return resposta;
+    }
+
+    function texto(elemento, valor) { elemento.textContent = valor; return elemento; }
+
+    async function buscar() {
+      var termo = document.getElementById("busca").value;
+      var atendimentos = await (await pedir("/api/atendimentos?busca=" + encodeURIComponent(termo))).json();
+      lista.textContent = "";
+      if (!atendimentos.length) {
+        lista.appendChild(texto(document.createElement("p"), "Nenhum atendimento encontrado."));
+        return;
+      }
+      atendimentos.forEach(function (a) {
+        var botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = "atendimento";
+        botao.innerHTML =
+          '<b></b><span class="custo"></span><span class="quando"></span><span class="custo desfecho"></span>';
+        texto(botao.querySelector("b"), a.cliente);
+        texto(botao.querySelector(".custo"), a.custo);
+        texto(botao.querySelector(".quando"), a.quando);
+        texto(botao.querySelector(".desfecho"), a.desfecho);
+        botao.addEventListener("click", function () { abrir(a.id); });
+        lista.appendChild(botao);
+      });
+    }
+
+    async function abrir(id) {
+      var atendimento = await (await pedir("/api/atendimentos/" + id)).json();
+      lista.textContent = "";
+
+      var voltar = document.createElement("button");
+      voltar.type = "button";
+      voltar.className = "humano";
+      voltar.textContent = "← voltar para a lista";
+      voltar.addEventListener("click", buscar);
+      lista.appendChild(voltar);
+
+      var caixa = document.createElement("div");
+      caixa.className = "transcricao";
+      atendimento.linhas.forEach(function (linha) {
+        var item = document.createElement("div");
+        if (linha.tipo === "fala") {
+          item.className = "fala";
+          item.innerHTML = '<span class="hora"></span><span class="quem"></span><span class="texto"></span>';
+          texto(item.querySelector(".quem"), linha.quem);
+        } else {
+          item.className = "acao";
+          item.dataset.simbolo = linha.simbolo;
+          item.innerHTML = '<span class="hora"></span><span class="texto"></span>';
+        }
+        texto(item.querySelector(".hora"), linha.hora);
+        texto(
+          item.querySelector(".texto"),
+          linha.tipo === "fala" ? linha.texto : linha.simbolo + "  " + linha.texto
+        );
+        caixa.appendChild(item);
+      });
+      lista.appendChild(caixa);
+
+      var rodape = document.createElement("div");
+      rodape.className = "rodape-atendimento";
+      [
+        ["custo do atendimento", atendimento.rodape.custo],
+        ["duração", atendimento.rodape.duracao_min + " min"],
+        ["turnos", atendimento.rodape.turnos],
+        ["desfecho", atendimento.desfecho],
+        ["modelo usado", atendimento.rodape.modelo],
+        ["versão do prompt", atendimento.rodape.versao_do_prompt]
+      ].forEach(function (par) {
+        var bloco = document.createElement("div");
+        bloco.innerHTML = "<b></b><span></span>";
+        texto(bloco.querySelector("b"), String(par[1]));
+        texto(bloco.querySelector("span"), par[0]);
+        rodape.appendChild(bloco);
+      });
+      lista.appendChild(rodape);
+    }
+
+    document.getElementById("forma").addEventListener("submit", function (evento) {
+      evento.preventDefault();
+      buscar();
+    });
+    document.getElementById("sair").addEventListener("click", async function () {
+      await fetch("/api/sair", { method: "POST" });
+      location.href = "/entrar";
+    });
+
+    (async function inicio() {
+      try {
+        var eu = await (await pedir("/api/eu")).json();
+        document.getElementById("quem").textContent = eu.nome;
+        await buscar();
+      } catch (falha) {
+        if (falha.message === "sem acesso") {
+          document.getElementById("tela").innerHTML = "<p>Este acesso não alcança os atendimentos.</p>";
+        }
+      }
+    })();
+  </script>
+</body>
+
+</html>

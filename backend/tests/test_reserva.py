@@ -20,7 +20,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.pii import cifrar, hash_telefone
-from app.db import URL, agora
+from app.db import URL, agora, engine
 from app.ia.etapas import tools_da_etapa
 from app.ia.registro import disponiveis
 from app.modelos import (
@@ -121,9 +121,22 @@ def test_cinquenta_simultaneas_exatamente_uma_vence(sessao: Session, unidade: No
     tentativas = 50
     # Pool do tamanho da corrida: com o pool padrão as threads enfileiram, e enfileirar
     # é justamente o que faria este teste passar sem provar nada.
+    #
+    # O `dispose` do motor global antes de começar não é zelo: sem ele, as conexões que a
+    # suíte já segurava somadas a estas 50 encostam no `max_connections` do Postgres, e o
+    # portão passa a falhar de vez em quando. Portão intermitente vira "roda de novo",
+    # que é como um portão deixa de ser portão.
+    engine.dispose()
     motor = create_engine(URL, pool_size=tentativas, max_overflow=0, pool_pre_ping=True)
     Fabrica = sessionmaker(motor, expire_on_commit=False)
 
+    try:
+        _corrida(Fabrica, tentativas)
+    finally:
+        motor.dispose()
+
+
+def _corrida(Fabrica: sessionmaker[Session], tentativas: int) -> None:
     cenarios = []
     for _ in range(tentativas):
         with Fabrica() as preparo:
@@ -155,7 +168,6 @@ def test_cinquenta_simultaneas_exatamente_uma_vence(sessao: Session, unidade: No
             )
         ).all()
         assert len(ativas) == 1
-    motor.dispose()
 
 
 # ── perder a corrida ─────────────────────────────────────────────────────────────

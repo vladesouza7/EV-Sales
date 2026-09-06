@@ -3,11 +3,19 @@
 **Depende de:** [S-02](S-02-chat-web-e-sessao.md)
 **Implementada ANTES de [S-03](S-03-agente-aurora.md)** — inversão deliberada, ver [ADR-006](../adr/ADR-006-observabilidade-e-teto-de-custo.md)
 **Decide por:** [ADR-006](../adr/ADR-006-observabilidade-e-teto-de-custo.md), [ADR-008](../adr/ADR-008-openrouter-como-provedor.md)
-**Estado:** parcial. §1, §2, §3, §6 e §7 estão no código (`app/observabilidade.py`, tabelas
-`trilha` e `incidentes`). **Falta** a tela "Ler atendimento" (§4) e o painel de custo (§5): as
-duas exigem sessão autenticada, que ainda não existe no projeto. O que já está pronto é a
-**origem** que as duas leem — e é ela que o [ADR-006](../adr/ADR-006-observabilidade-e-teto-de-custo.md)
-manda existir antes da [S-03](S-03-agente-aurora.md).
+**Estado:** ◐ parcial — §1 a §7 estão no código. **Falta** o Langfuse como segunda leitura
+(a trilha vive no Postgres, e exportar é um `for` sobre a tabela) e o envio dos alertas por
+WhatsApp, que é da [S-06](S-06-handoff-whatsapp.md).
+
+| § | O quê | Estado |
+|---|---|---|
+| §1 | Trilha, com PII mascarada na montagem | ✔ `app/observabilidade.py` |
+| §2 | Custo faturado | ✔ e, com o [ADR-012](../adr/ADR-012-provedor-configuravel.md), a trilha diz **se** é faturado |
+| §3 | Teto que corta, alerta em 80%, `custo_alto` | ◐ o corte sim; o **envio** do alerta é da S-06 |
+| §4 | Tela "Ler atendimento" | ✔ `/atendimentos` |
+| §5 | Painel de custo | ✔ `/custo` |
+| §6 | Incidentes | ✔ |
+| §7 | Saúde | ✔ |
 
 ---
 

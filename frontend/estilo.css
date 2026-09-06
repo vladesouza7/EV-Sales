@@ -349,3 +349,60 @@ input[type="date"] { color-scheme: light dark; }
 }
 .motivos button:hover { border-color: var(--erro); }
 .motivos .cancelar { color: var(--muted); border-style: dashed; }
+
+/* ── S-08 §4 · ler atendimento ───────────────────────────────────────────────── */
+
+.busca { display: flex; gap: 10px; padding: 20px 0 4px; }
+.busca input { margin: 0; }
+.busca button { min-height: 48px; padding: 0 20px; white-space: nowrap; }
+
+.lista-atendimentos { display: grid; gap: 10px; padding: 16px 0 40px; }
+.atendimento {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: baseline;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; cursor: pointer; text-align: left; width: 100%;
+  color: var(--ink); font: inherit;
+}
+.atendimento:hover { border-color: var(--cyan); }
+.atendimento b { letter-spacing: -.02em; }
+.atendimento .quando { color: var(--muted); font-size: .8rem; }
+.atendimento .custo { color: var(--muted); font-size: .8rem; text-align: right; }
+
+/* A conversa como ela aconteceu: fala do cliente, fala da Aurora, e as linhas de ação. */
+.transcricao { display: grid; gap: 2px; padding: 8px 0 20px; }
+.transcricao .fala { display: grid; grid-template-columns: 52px 92px 1fr; gap: 10px; padding: 7px 0; }
+.transcricao .fala .hora, .transcricao .acao .hora { color: var(--muted); font-size: .78rem; }
+.transcricao .fala .quem { font-weight: 700; font-size: .84rem; }
+.transcricao .fala .texto { line-height: 1.5; }
+/* ⚙ e ⏸ são o que separa transcrição de auditoria: onde o número veio de fora do
+   modelo, e onde uma pessoa decidiu. */
+.transcricao .acao {
+  display: grid; grid-template-columns: 52px 1fr; gap: 10px; padding: 6px 0 6px 0;
+  color: var(--muted); font-size: .85rem;
+}
+.transcricao .acao .texto { border-left: 2px solid var(--line); padding-left: 12px; }
+.transcricao .acao[data-simbolo="⏸"] .texto { border-left-color: var(--cyan); color: var(--ink); }
+.transcricao .acao[data-simbolo="⚠"] .texto { border-left-color: var(--erro); color: var(--erro); }
+
+.rodape-atendimento {
+  display: flex; flex-wrap: wrap; gap: 18px; border-top: 1px solid var(--line);
+  padding: 16px 0 40px; color: var(--muted); font-size: .82rem;
+}
+.rodape-atendimento b { color: var(--ink); display: block; font-size: .95rem; }
+
+/* ── S-08 §5 · painel de custo ───────────────────────────────────────────────── */
+
+.numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; padding: 20px 0; }
+.numero { background: var(--bg-card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.numero small { color: var(--muted); font-size: .78rem; display: block; margin-bottom: 6px; }
+.numero b { font-size: 1.5rem; font-weight: 800; letter-spacing: -.04em; }
+
+.barra { height: 12px; border-radius: 40px; background: var(--bg-secondary); overflow: hidden; margin: 6px 0 24px; }
+.barra div { height: 100%; border-radius: 40px; transition: width .4s ease; }
+.barra div[data-faixa="verde"] { background: #1f9d55; }
+.barra div[data-faixa="ambar"] { background: #d59216; }
+.barra div[data-faixa="vermelho"] { background: #c8402f; }
+
+.grafico { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding: 12px 0 40px; }
+.grafico span { flex: 1; background: var(--cyan); border-radius: 3px 3px 0 0; opacity: .75; min-height: 2px; }
+.grafico span:hover { opacity: 1; }

@@ -57,6 +57,17 @@ class Lead(Base):
             f"{self._mascarado(mascarar_telefone, self.telefone_cifrado)}>"
         )
 
+    def nome_mascarado(self) -> str:
+        """O nome para tela e log, e **a única forma de ler nome fora dos três chamadores
+        autorizados de `decifrar`** (S-09 §3).
+
+        Nunca levanta, pela mesma razão que o `__repr__` não levanta: um registro antigo
+        que não decifra — chave girada, blob corrompido — não pode derrubar a fila da
+        Neuza nem a tela do Raí inteiras. Um cliente aparece como `?`; os outros oito
+        continuam visíveis.
+        """
+        return self._mascarado(mascarar_nome, self.nome_cifrado)
+
     @staticmethod
     def _mascarado(mascarar: Callable[[str], str], blob: bytes | None) -> str:
         if not blob:

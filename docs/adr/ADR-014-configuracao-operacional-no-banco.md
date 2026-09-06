@@ -115,8 +115,11 @@ página. Número que o sistema imprime numa página pública não é dado pessoa
 
 Salvar credencial que não funciona é derrubar a Aurora pela tela — e é o risco novo que este ADR
 cria, então ele nasce mitigado. Antes de gravar, o servidor usa a credencial: uma chamada mínima ao
-provedor, um `GET` de estado na instância da Evolution. Se não autenticar, **não grava**, e a tela
-diz o que o provedor respondeu.
+provedor, um `GET` de estado na instância da Evolution.
+
+**Recusa e indisponibilidade não são a mesma coisa.** `401` e `403` não gravam — a credencial não
+serve. `5xx` e timeout gravam, com aviso: é o provedor que está fora, e tratar isso como recusa
+trancaria a tela exatamente na hora em que alguém precisa trocar de provedor porque o atual caiu.
 
 O teste é contra o valor que está sendo enviado, nunca contra o que já está guardado — e a resposta
 do provedor entra na tela, não no log, porque mensagem de erro de autenticação costuma ecoar a
@@ -177,6 +180,11 @@ domínio.
 - **Alguém pode derrubar a Aurora pela tela.** Mitigado pelo §6, e não eliminado: credencial válida
   hoje pode ser revogada amanhã do outro lado. É o mesmo risco que já existe com o `.env`, agora com
   mais gente alcançando o botão.
+- **O servidor passa a buscar uma URL que uma pessoa digitou.** `evolution_url` e `llm_url` viram
+  requisições de dentro da rede para um endereço arbitrário. Restrito a `http`/`https`, sem seguir
+  redirecionamento, com tempo limite, sem devolver o corpo — e alcançável só pelo `dono`. É a
+  superfície nova mais desconfortável deste ADR, e está escrita porque um dia ela justifica uma
+  lista de destinos permitidos.
 
 **Ganhas:**
 

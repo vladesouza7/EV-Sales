@@ -72,13 +72,22 @@ payload dele, não retentativa nossa ([ADR-012](../adr/ADR-012-provedor-configur
 
 ### 3. Quem recebe aviso — telefone de pessoa não mora aqui
 
-A tela edita **três** telefones que não são chaves de configuração:
+A tela edita **quatro** telefones que não são chaves de configuração:
 
 | Quem | Onde mora | Para quê |
 |---|---|---|
 | Neuza | `usuarios.telefone_cifrado` — coluna nova | A notificação de aprovação ([S-04 §3](S-04-fila-de-aprovacao.md)) |
+| Raí | idem | O escalonamento de 15 min ([S-04 §3](S-04-fila-de-aprovacao.md)) e o alerta de 80 % do teto ([S-08 §3](S-08-observabilidade-e-custo.md)) |
 | Tarcísio | `vendedores.telefone_cifrado` — já existe | Aviso de test drive ([S-07 §6](S-07-test-drive.md)) |
 | Jaqueline | idem | idem |
+
+A coluna é de `usuarios`, não uma lista de destinatários: **quem tem telefone recebe o que o perfil
+dele manda receber**. Uma lista separada seria um segundo lugar dizendo quem é a gerente, e os dois
+divergiriam no dia em que a Sol & Volt contratasse a segunda.
+
+Isso também resolve uma pendência silenciosa: a [S-10 §6](S-10-operacao.md) manda "verificar
+`NEUZA_WHATSAPP`" num runbook, e essa variável **nunca existiu** no `.env.example`. Agora ela tem
+lugar, e a linha do runbook passa a apontar para a tela.
 
 São telefones **de pessoas**, e ficam com as pessoas: uma segunda cópia dentro de `configuracoes`
 seria a cópia que a retenção da [S-09 §6](S-09-protecao-de-pii.md) esquece de apagar
@@ -119,17 +128,42 @@ nada: para remover um valor, o corpo traz `{"chave": "llm_fallbacks", "limpar": 
 | Provedor | Uma chamada de 1 token ao `/chat/completions` do preset | resposta 2xx |
 | Evolution | `GET {evolution_url}/instance/connectionState/{instancia}` com a `apikey` | resposta 2xx |
 
-`PUT` roda o mesmo teste e **só grava se passar**. Credencial que não autentica não entra no banco —
-salvar chave inválida é derrubar a Aurora pela tela, e é o risco que o
-[ADR-014](../adr/ADR-014-configuracao-operacional-no-banco.md) §6 aceita criar e mitigar aqui.
+`PUT` roda o mesmo teste, e **o que decide não é "falhou", é o motivo**:
 
-Falhou: `422`, com a mensagem do provedor **na resposta e na tela, nunca no log** — erro de
-autenticação costuma ecoar a credencial que o causou, e log é uma das quatro superfícies da
+| O provedor respondeu | O que acontece | Por quê |
+|---|---|---|
+| 2xx | grava | a credencial serve |
+| **401 ou 403** | **não grava**, `422` na tela | a credencial foi recusada, e gravar seria derrubar a Aurora |
+| 5xx, timeout, DNS | **grava**, com aviso na tela | é indisponibilidade, não recusa |
+
+A terceira linha é a que faltava na primeira versão desta spec, e ela importa mais do que parece:
+com "só grava se passar", uma instabilidade do provedor **tranca a tela justamente na hora em que
+alguém precisa trocar de provedor**. O modo de falha que a tela existe para resolver seria o modo de
+falha que a impede de funcionar.
+
+Falhou por recusa: `422`, com a mensagem do provedor **na resposta e na tela, nunca no log** — erro
+de autenticação costuma ecoar a credencial que o causou, e log é uma das quatro superfícies da
 invariante 5.
+
+O caminho de `connectionState` acima é o da Evolution API v2 e **precisa ser conferido contra a
+versão que a Sol & Volt subir**: se divergir, o que vale é o contrato dela, não esta linha.
 
 A tela mostra ainda, somente leitura, o estado que a Evolution devolveu: `conectado`,
 `desconectado` ou `não configurado`, com data da leitura. **O QR code não fica aqui** — ver §"Fora
 do escopo".
+
+**O teste faz o servidor buscar uma URL que uma pessoa digitou** (`evolution_url`, e `llm_url`
+quando o provedor é `compativel`). É uma requisição de dentro da rede para um endereço arbitrário, e
+ela nasce com as restrições em vez de ganhá-las depois de um incidente:
+
+- só `http://` e `https://`;
+- **redirecionamento não é seguido** — é assim que uma URL externa vira uma interna;
+- tempo limite de 5 segundos;
+- a resposta **não** volta para a tela: só se ela autenticou ou não. Devolver o corpo faria da tela
+  um leitor de qualquer endereço que o servidor alcança.
+
+O risco residual é aceito porque só o `dono` alcança a rota. Não é aceito em silêncio: está escrito
+aqui, e é o que um dia justifica uma lista de destinos permitidos.
 
 ### 6. Precedência, cache e quando a troca passa a valer
 
@@ -151,6 +185,12 @@ O provedor passa a ser montado **no início de cada turno**, a partir desse leit
 import como hoje ([`app/ia/provedor.py`](../../backend/app/ia/provedor.py)). Sem isso, salvar na tela
 não teria efeito até alguém reiniciar a API — que é exatamente o passo que esta spec existe para
 eliminar.
+
+Isso move uma costura que a suíte inteira usa: hoje `turno.PROVEDOR` é um objeto de módulo, e o
+`conftest` troca ele por um dublê com `monkeypatch.setattr(modulo_turno, "PROVEDOR", duble)` em
+**todos** os testes, por fixture `autouse`. Quem implementar precisa manter um ponto único de
+substituição — senão os 273 testes passam a falar com a rede de verdade e falham pelo motivo errado.
+A `GET /health/ready` da [S-08 §7](S-08-observabilidade-e-custo.md) lê o mesmo objeto e vai junto.
 
 Critério concreto: **a troca vale no próximo turno, em no máximo 30 segundos.**
 
@@ -256,6 +296,28 @@ Cenário: a troca vale sem reiniciar
   Dado um turno que já rodou com o modelo antigo
   Quando o Raí grava um modelo novo
   Então o turno seguinte usa o modelo novo, em no máximo 30 segundos
+
+Cenário: provedor fora do ar não tranca a tela
+  Dado que o provedor devolve 503
+  Quando o Raí salva uma chave nova
+  Então o valor é gravado
+  E a tela avisa que não deu para confirmar a credencial agora
+
+Cenário: credencial recusada é diferente de provedor caído
+  Dado que o provedor devolve 401
+  Quando o Raí salva
+  Então nada é gravado
+
+Cenário: o teste não segue redirecionamento
+  Dado um evolution_url que responde 302 para um endereço interno
+  Quando o Raí testa
+  Então o servidor não busca o segundo endereço
+  E a tela recebe só "não autenticou"
+
+Cenário: o Raí recebe o escalonamento
+  Dado um pedido sem decisão há 15 minutos
+  E o telefone do Raí cadastrado na tela
+  Então a notificação vai para ele
 
 Cenário: trocar deixa rastro sem deixar o valor
   Quando o Raí grava llm_chave

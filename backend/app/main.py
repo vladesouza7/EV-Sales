@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.conversas import router as rotas_de_conversa
@@ -47,6 +48,34 @@ async def erro_sem_eco_de_pii(_: Request, erro: RequestValidationError) -> JSONR
             ]
         },
     )
+
+
+@app.get("/health", include_in_schema=False)
+def saude() -> dict[str, str]:
+    """Liveness: o processo está de pé, e nada além disso.
+
+    Não toca em dependência de propósito — um liveness que consulta o banco reinicia a
+    api quando quem caiu foi o Postgres, que é o oposto do que se quer no incidente.
+    """
+    return {"status": "ok"}
+
+
+@app.get("/health/ready", include_in_schema=False)
+def saude_das_dependencias(sessao: BancoDeDados, resposta: Response) -> dict[str, str]:
+    """S-08 §7 — readiness. Só o que existe hoje é conferido.
+
+    ponytail: Redis, OpenRouter e a instância da Evolution entram aqui quando entrarem
+    no projeto (S-03, S-06). Um item fixo em "não configurado" seria checagem que nunca
+    falha, e checagem que nunca falha é ruído.
+    """
+    try:
+        sessao.execute(text("SELECT 1"))
+    except Exception:
+        # Sem `str(erro)`: a URL do banco carrega a senha, e o corpo de erro é uma das
+        # quatro superfícies que a invariante 5 nomeia.
+        resposta.status_code = 503
+        return {"postgres": "indisponivel"}
+    return {"postgres": "ok"}
 
 
 @app.get("/", include_in_schema=False)

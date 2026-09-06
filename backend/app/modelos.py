@@ -235,3 +235,65 @@ class TestDrive(Base):
     status: Mapped[str] = mapped_column(String(16), default="agendado")
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
     confirmado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
+class Trilha(Base):
+    """S-08 §1 — a trilha de auditoria: um turno, uma tool, uma verificação, um evento.
+
+    É a **origem** das duas leituras do ADR-006: a tela do Raí lê daqui as linhas `⚙` e
+    `⏸`, e eu leio daqui a latência e o custo. Fica no Postgres, e não só no Langfuse,
+    porque a tela do Raí é produto — depender da API de uma ferramenta de terceiro para
+    renderizar a conversa dele seria trocar o dado por um serviço.
+
+    ponytail: exportar cada linha para o Langfuse é um `for` sobre esta tabela; entra
+    quando o container entrar (S-10). O que não pode mudar é onde a PII é mascarada —
+    aqui, na montagem, nunca na configuração da ferramenta (ADR-006, ADR-007).
+    """
+
+    __tablename__ = "trilha"
+    __table_args__ = (
+        CheckConstraint(
+            "tipo IN ('turno', 'tool', 'verificacao', 'evento')", name="ck_trilha_tipo"
+        ),
+        CheckConstraint("custo_micro_reais >= 0", name="ck_trilha_custo_nao_negativo"),
+        Index("ix_trilha_conversa_criado", "conversa_id", "criado_em"),
+        Index("ix_trilha_criado", "criado_em"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # SET NULL, não CASCADE: apagar o lead pela retenção da S-09 §6 não pode apagar o
+    # gasto do mês. O que some é o vínculo com a pessoa, não o número que o Raí pagou.
+    conversa_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversas.id", ondelete="SET NULL"), default=None
+    )
+    tipo: Mapped[str] = mapped_column(String(12))
+    nome: Mapped[str] = mapped_column(String(40))
+    dados: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    duracao_ms: Mapped[int | None] = mapped_column(Integer, default=None)
+    # Micro-reais, não centavos: um turno custa fração de centavo, e arredondar turno a
+    # turno erraria o total do mês por mais do que a margem do teto. `bigint` inteiro
+    # continua valendo (CLAUDE.md) — o que muda é a escala, não o tipo.
+    custo_micro_reais: Mapped[int] = mapped_column(BigInteger, default=0)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+
+class Incidente(Base):
+    """S-08 §6 — incidente que só existe em trace é incidente que ninguém revisa."""
+
+    __tablename__ = "incidentes"
+    __table_args__ = (
+        CheckConstraint(
+            "gravidade IN ('critica', 'alta', 'baixa', 'informativa')",
+            name="ck_incidentes_gravidade",
+        ),
+        Index("ix_incidentes_tipo_criado", "tipo", "criado_em"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    conversa_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversas.id", ondelete="SET NULL"), default=None
+    )
+    tipo: Mapped[str] = mapped_column(String(30))
+    gravidade: Mapped[str] = mapped_column(String(12))
+    dados: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)

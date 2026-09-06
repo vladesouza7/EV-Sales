@@ -3,6 +3,11 @@
 **Depende de:** [S-02](S-02-chat-web-e-sessao.md)
 **Implementada ANTES de [S-03](S-03-agente-aurora.md)** — inversão deliberada, ver [ADR-006](../adr/ADR-006-observabilidade-e-teto-de-custo.md)
 **Decide por:** [ADR-006](../adr/ADR-006-observabilidade-e-teto-de-custo.md), [ADR-008](../adr/ADR-008-openrouter-como-provedor.md)
+**Estado:** parcial. §1, §2, §3, §6 e §7 estão no código (`app/observabilidade.py`, tabelas
+`trilha` e `incidentes`). **Falta** a tela "Ler atendimento" (§4) e o painel de custo (§5): as
+duas exigem sessão autenticada, que ainda não existe no projeto. O que já está pronto é a
+**origem** que as duas leem — e é ela que o [ADR-006](../adr/ADR-006-observabilidade-e-teto-de-custo.md)
+manda existir antes da [S-03](S-03-agente-aurora.md).
 
 ---
 

@@ -184,5 +184,6 @@ def test_saude_responde_com_o_estado_das_dependencias(cliente: TestClient) -> No
     pronto = cliente.get("/health/ready")
     assert pronto.status_code == 200
     assert pronto.json()["postgres"] == "ok"
-    # Sem chave no ambiente de teste: o readiness diz isso em vez de fingir que está de pé.
-    assert pronto.json()["openrouter"] == "nao_configurado"
+    # Sem chave no ambiente de teste: o readiness diz isso em vez de fingir que está de pé,
+    # e diz **qual** provedor está ligado, que com o ADR-012 é informação de operação.
+    assert pronto.json()["llm"] == "openrouter: nao_configurado"

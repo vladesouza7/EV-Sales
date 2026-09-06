@@ -19,14 +19,23 @@ TEXTO_PADRAO = (
 class ProvedorDuble:
     """Devolve as respostas na ordem em que foram programadas; depois, o texto padrão."""
 
+    nome = "duble"
+
     def __init__(self) -> None:
         self.respostas: list[Resposta] = []
         self.chamadas: list[tuple[list[dict[str, object]], list[dict[str, object]]]] = []
         self.disponivel = True
 
-    def responder(self, texto: str, custo_micro_reais: int = 0) -> None:
+    def responder(
+        self, texto: str, custo_micro_reais: int = 0, custo_faturado: bool = True
+    ) -> None:
         self.respostas.append(
-            Resposta(texto=texto, modelo="duble/teste", custo_micro_reais=custo_micro_reais)
+            Resposta(
+                texto=texto,
+                modelo="duble/teste",
+                custo_micro_reais=custo_micro_reais,
+                custo_faturado=custo_faturado,
+            )
         )
 
     def chamar_tool(self, nome: str, **argumentos: object) -> None:

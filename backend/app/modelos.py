@@ -274,6 +274,10 @@ class Trilha(Base):
     # turno erraria o total do mês por mais do que a margem do teto. `bigint` inteiro
     # continua valendo (CLAUDE.md) — o que muda é a escala, não o tipo.
     custo_micro_reais: Mapped[int] = mapped_column(BigInteger, default=0)
+    # ADR-012: provedor que não fatura grava 0 aqui e `false` aqui embaixo. Sem esta
+    # coluna, o painel do Raí leria R$ 0,00 para uma API que ele está pagando, e o teto
+    # de R$ 900 deixaria de proteger sem dizer nada.
+    custo_faturado: Mapped[bool] = mapped_column(Boolean, default=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
 

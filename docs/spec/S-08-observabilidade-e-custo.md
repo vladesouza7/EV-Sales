@@ -43,6 +43,12 @@ custo_conversa = soma dos turnos
 custo_mes    = contador incremental em Redis, chave "custo:2026-09", com backup diário no Postgres
 ```
 
+**Emenda do [ADR-012](../adr/ADR-012-provedor-configuravel.md).** Com o provedor virando
+configuração, só o OpenRouter devolve custo faturado. `trilha.custo_faturado` guarda a diferença
+entre **"custou zero"** e **"não sei quanto custou"**, e o mês que tiver qualquer turno não faturado
+registra o incidente `custo_nao_faturado` — porque um teto que deixa de contar sem avisar é pior que
+teto nenhum.
+
 ### 3. Teto — verificado antes de cada chamada
 
 ```python

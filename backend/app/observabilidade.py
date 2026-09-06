@@ -45,6 +45,9 @@ GRAVIDADE: dict[str, str] = {
     "evolution_desconectada": "critica",
     "teto_atingido": "critica",
     "custo_alto": "baixa",
+    # ADR-012: o provedor configurado não devolve custo faturado. Não é anomalia, é
+    # configuração — mas precisa aparecer, senão o teto para de proteger em silêncio.
+    "custo_nao_faturado": "baixa",
     # O alerta de 80% da §3. Não está na tabela da §6 porque lá só entrou o que já
     # aconteceu; este é o aviso de que vai acontecer, e o Raí quer os dois.
     "custo_perto_do_teto": "alta",
@@ -76,6 +79,7 @@ def registrar(
     dados: dict[str, object] | None = None,
     duracao_ms: int | None = None,
     custo_micro_reais: int = 0,
+    custo_faturado: bool = True,
 ) -> Trilha:
     linha = Trilha(
         conversa_id=conversa_id,
@@ -84,6 +88,7 @@ def registrar(
         dados=_mascarar(dados or {}),
         duracao_ms=duracao_ms,
         custo_micro_reais=custo_micro_reais,
+        custo_faturado=custo_faturado,
     )
     sessao.add(linha)
     sessao.commit()
@@ -183,3 +188,18 @@ def marcar_se_conversa_cara(sessao: Session, conversa_id: uuid.UUID) -> None:
     if _ja_houve(sessao, "custo_alto", conversa_id=conversa_id):
         return
     registrar_incidente(sessao, conversa_id, "custo_alto", {"custo_micro_reais": custo})
+
+
+def avisar_custo_nao_faturado(sessao: Session) -> None:
+    """ADR-012 — o teto só protege o que ele consegue contar.
+
+    Uma vez por dia, para entrar na revisão semanal do Raí. Não corta e não alerta
+    ninguém de madrugada: o provedor não faturar é decisão de operação, não incidente.
+    O que não pode é a decisão sumir e o painel mostrar R$ 0,00 como se fosse verdade.
+    """
+    inicio_do_dia = agora().replace(hour=0, minute=0, second=0, microsecond=0)
+    if _ja_houve(sessao, "custo_nao_faturado", desde=inicio_do_dia):
+        return
+    registrar_incidente(
+        sessao, None, "custo_nao_faturado", {"gasto_faturado_no_mes": gasto_do_mes(sessao)}
+    )

@@ -242,3 +242,29 @@ def test_resposta_vazia_do_modelo_vira_atendimento_humano(
     sessao.expire_all()
     conversa = sessao.get(Conversa, conversa_id)
     assert conversa is not None and conversa.modo == "humano"
+
+
+def test_provedor_que_nao_fatura_grava_custo_desconhecido_e_avisa(
+    cliente: TestClient, sessao: Session, provedor: ProvedorDuble
+) -> None:
+    """ADR-012 — "não sei quanto custou" não pode virar R$ 0,00 no painel do Raí."""
+    conversa_id = _conversa_em(cliente, sessao, "qualificacao")
+    provedor.responder("Certo!", custo_faturado=False)
+    provedor.responder("Certo de novo!", custo_faturado=False)
+
+    for texto in ("oi", "e aí?"):
+        cliente.post(f"/api/conversas/{conversa_id}/mensagens", json={"conteudo": texto})
+        _turno(sessao, conversa_id)
+
+    turnos = sessao.scalars(
+        select(Trilha).where(Trilha.conversa_id == conversa_id, Trilha.tipo == "turno")
+    ).all()
+    assert [t.custo_faturado for t in turnos] == [False, False]
+    assert all(t.custo_micro_reais == 0 for t in turnos)
+
+    # Uma vez por dia, não uma por turno: é para a revisão semanal, não para incomodar.
+    avisos = sessao.scalars(
+        select(Incidente).where(Incidente.tipo == "custo_nao_faturado")
+    ).all()
+    assert len(avisos) == 1
+    assert avisos[0].gravidade == "baixa"

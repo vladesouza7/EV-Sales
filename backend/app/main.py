@@ -66,17 +66,18 @@ def saude_das_dependencias(sessao: BancoDeDados, resposta: Response) -> dict[str
     """S-08 §7 — readiness. Só o que existe hoje é conferido.
 
     O provedor aparece como `configurado`, e não como `ok`: daqui só dá para afirmar que
-    a chave e o modelo estão no ambiente. Dizer "ok" seria afirmar que o OpenRouter
-    responde, o que exigiria gastar uma chamada de verdade a cada readiness.
+    a chave, o modelo e a URL estão no ambiente. Dizer "ok" seria afirmar que ele responde,
+    o que exigiria gastar uma chamada de verdade a cada readiness. O nome do provedor sai
+    junto porque, com o ADR-012, qual deles está ligado é informação de operação.
 
     ponytail: Redis e a instância da Evolution entram quando entrarem no projeto (S-06).
 
     Só o Postgres derruba o readiness: sem provedor a Aurora degrada para atendimento
     humano, que é operação reduzida e não indisponibilidade.
     """
-    estado = {
-        "openrouter": "configurado" if PROVEDOR.configurado() else "nao_configurado",
-    }
+    nome = getattr(PROVEDOR, "nome", "?")
+    situacao = "configurado" if PROVEDOR.configurado() else "nao_configurado"
+    estado = {"llm": f"{nome}: {situacao}"}
     try:
         sessao.execute(text("SELECT 1"))
     except Exception:

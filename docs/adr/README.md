@@ -18,6 +18,7 @@ alternativas que foram descartadas e as consequências aceitas — inclusive as 
 | [009](ADR-009-sem-framework-de-orquestracao.md) | Sem framework: loop de tools + estado no Postgres | Um ponto de pausa, estado que o Raí lê | LangGraph com checkpointer |
 | [010](ADR-010-cadastro-antes-do-chat.md) | Nome e telefone antes do chat, com saída pelo lado | Decisão de produto do Raí | Chat aberto, telefone no meio |
 | [011](ADR-011-jornada-digital-termina-no-test-drive.md) | A jornada digital termina no test drive; a venda é presencial | NF, faturamento e crédito já existem no DMS | Simular a venda completa com NF-e |
+| [012](ADR-012-provedor-configuravel.md) | Provedor de LLM por configuração; a trilha diz se o custo é faturado | Não depender de uma conta em intermediário | Uma classe por fabricante |
 
 ## As três que mais custaram
 

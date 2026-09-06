@@ -22,12 +22,13 @@ from sqlalchemy.orm import Session
 
 from app.core.pii import decifrar, redigir
 from app.db import agora
-from app.ia.provedor import OpenRouterLLM, ProvedorIndisponivel, ProvedorLLM
+from app.ia.provedor import ProvedorCompativel, ProvedorIndisponivel, ProvedorLLM
 from app.ia.tools import disponiveis, esquemas, executar
 from app.ia.verificacao import Veredito, permitidos_de, verificar
 from app.modelos import Conversa, Lead, Mensagem, Unidade
 from app.observabilidade import (
     MENSAGEM_NO_TETO,
+    avisar_custo_nao_faturado,
     marcar_se_conversa_cara,
     pode_chamar_llm,
     registrar,
@@ -69,7 +70,7 @@ ORIENTACAO_POR_ETAPA = {
 
 # ponytail: uma instância de módulo. O provedor não guarda estado por conversa, e trocar
 # por injeção de dependência só teria valor quando houvesse mais de uma implementação.
-PROVEDOR: ProvedorLLM = OpenRouterLLM()
+PROVEDOR: ProvedorLLM = ProvedorCompativel()
 
 
 def verificar_numeros(texto: str, permitidos: set[tuple[str, float]], do_cliente: str) -> Veredito:
@@ -247,7 +248,7 @@ async def executar_turno(
         return
 
     if not PROVEDOR.configurado():
-        logger.error("EVSALES_MODELO ou EVSALES_OPENROUTER_API_KEY ausentes: turno degradado")
+        logger.error("provedor de LLM não configurado (ADR-012): turno degradado para humano")
         for evento in _degradar(sessao, conversa, entrada, "provedor_nao_configurado", comeco):
             yield evento
         return
@@ -420,8 +421,11 @@ async def executar_turno(
         },
         duracao_ms=_ms(comeco),
         custo_micro_reais=custo,
+        custo_faturado=resposta.custo_faturado,
     )
     marcar_se_conversa_cara(sessao, conversa.id)
+    if not resposta.custo_faturado:
+        avisar_custo_nao_faturado(sessao)
 
     for pedaco in _fatiar(texto):
         yield "token", {"texto": pedaco}

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ia.tools import disponiveis, esquemas
+from app.ia.registro import disponiveis, esquemas
 from app.modelos import Conversa, Incidente, Mensagem, Trilha, Unidade
 
 from .dubles import ProvedorDuble

@@ -1,7 +1,23 @@
 # S-04 — Fila de aprovação da Neuza e o Espelho de Condição
 
-**Depende de:** [S-03](S-03-agente-aurora.md)
-**Decide por:** [ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md), [ADR-011](../adr/ADR-011-jornada-digital-termina-no-test-drive.md)
+**Depende de:** [S-03](S-03-agente-aurora.md), [S-11](S-11-autenticacao-e-perfis.md)
+**Decide por:** [ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md), [ADR-011](../adr/ADR-011-jornada-digital-termina-no-test-drive.md), [ADR-013](../adr/ADR-013-minio-para-arquivo-gerado.md)
+**Estado:** ◐ parcial — o backend inteiro sim; **a tela da §4 não**.
+
+| § | O quê | Estado |
+|---|---|---|
+| §1 | `pedidos_de_aprovacao` e `espelhos`, com `approval_id` NOT NULL | ✔ |
+| §2 | A tool `solicitar_aprovacao`, que para o fluxo | ✔ `app/aprovacao.py` |
+| §3 | Notificação da Neuza, escalonamento em 15 min | ◐ o escalonamento sim; o **envio** por WhatsApp sai por log até a [S-06](S-06-handoff-whatsapp.md) |
+| §4 | A tela de decisão | ✗ o backend (`GET /api/aprovacoes`, aprovar, recusar) está pronto; a tela não |
+| §5 | Emissão do Espelho, com relê de preço e PDF | ✔ `app/espelho.py`, PDF no MinIO ([ADR-013](../adr/ADR-013-minio-para-arquivo-gerado.md)) |
+| §6 | Rejeição e expiração em 20 min | ✔ |
+| §7 | Auditoria: quem, quando, de qual IP | ✔ na `trilha` e no próprio pedido |
+
+**Uma diferença de esquema, e o motivo:** a coluna do documento chama-se `pdf_objeto`, e não
+`pdf_url`. Com o [ADR-013](../adr/ADR-013-minio-para-arquivo-gerado.md) a URL do Espelho é
+assinada e expira em 15 minutos — guardar uma URL na linha seria guardar um link morto. A linha
+guarda o objeto, e a URL é emitida na hora em que alguém autorizado pede.
 
 ---
 

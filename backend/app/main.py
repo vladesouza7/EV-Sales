@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.aprovacao import router as rotas_de_aprovacao
 from app.arquivos import NomeInvalido, caminho_da_foto, ler
 from app.autenticacao import Autenticado
 from app.autenticacao import router as rotas_de_autenticacao
@@ -35,6 +36,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message
 app = FastAPI(title="EV-Sales — Sol & Volt")
 app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 app.include_router(rotas_de_autenticacao)
+app.include_router(rotas_de_aprovacao)
 app.include_router(rotas_de_conversa)
 app.include_router(rotas_de_test_drive)
 

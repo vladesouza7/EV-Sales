@@ -13,6 +13,7 @@ from sqlalchemy import (
     Index,
     Integer,
     LargeBinary,
+    Sequence,
     String,
     Text,
     literal_column,
@@ -352,3 +353,99 @@ class Usuario(Base):
     def __repr__(self) -> str:
         """Sem e-mail: é identificador pessoal, e `logger.info(f"{usuario}")` acontece."""
         return f"<Usuario {self.id} {self.perfil}>"
+
+
+class PedidoDeAprovacao(Base):
+    """S-04 §1 — a pausa antes do irreversível.
+
+    ARQUIVO DE REVISÃO HUMANA OBRIGATÓRIA na parte de migration (CLAUDE.md): esta tabela e
+    `espelhos` são o que garante as invariantes 3 e 4.
+
+    `preco_centavos` é preenchido **pelo servidor**, relendo `unidades.preco_centavos` no
+    instante do pedido. Não vem do modelo, não vem do payload da requisição, não passa pelo
+    agente (ADR-004).
+    """
+
+    __tablename__ = "pedidos_de_aprovacao"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pendente', 'aprovado', 'rejeitado', 'expirado')",
+            name="ck_pedidos_status",
+        ),
+        CheckConstraint("preco_centavos > 0", name="ck_pedidos_preco_positivo"),
+        # Decisão sem quem decidiu é decisão sem dono. O par anda junto ou não existe.
+        CheckConstraint(
+            "(decidido_por IS NULL) = (decidido_em IS NULL)", name="ck_pedidos_decisao_completa"
+        ),
+        # Uma conversa não tem dois pedidos pendentes. A etapa `aguardando_aprovacao` não
+        # tem tools, então a Aurora não consegue pedir duas vezes — mas a garantia é aqui,
+        # e não na lista de tools, porque lista de tools é configuração e índice é banco.
+        Index(
+            "ux_pedidos_um_pendente_por_conversa",
+            "conversa_id",
+            unique=True,
+            postgresql_where=literal_column("status = 'pendente'"),
+        ),
+        Index("ix_pedidos_status_criado", "status", "criado_em"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    conversa_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversas.id", ondelete="CASCADE"))
+    chassi: Mapped[str] = mapped_column(ForeignKey("unidades.chassi"))
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id", ondelete="CASCADE"))
+    preco_centavos: Mapped[int] = mapped_column(BigInteger)
+    qualificacao_resumo: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    status: Mapped[str] = mapped_column(String(10), default="pendente")
+    decidido_por: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="RESTRICT"), default=None
+    )
+    decidido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    motivo_rejeicao: Mapped[str | None] = mapped_column(String(40), default=None)
+    # S-04 §7 — "quem, quando, de qual IP". O IP não é PII do cliente: é do funcionário.
+    ip_da_decisao: Mapped[str | None] = mapped_column(String(45), default=None)
+    # S-11 §7 — o link de uso único da notificação. Leva ao card, não substitui o login.
+    codigo: Mapped[str] = mapped_column(String(8), unique=True, index=True)
+    codigo_usado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    escalado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    trace_id: Mapped[str | None] = mapped_column(String(64), default=None)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+# Declarada no metadata, e não só na migration: sem isto o `create_all` do banco de teste
+# não a cria, e a numeração do Espelho só quebraria em produção.
+NUMERO_DO_ESPELHO = Sequence("espelhos_numero_seq", metadata=Base.metadata)
+
+
+class Espelho(Base):
+    """S-04 §1 — o Espelho de Condição e Reserva. **Não é contrato nem documento fiscal.**
+
+    O nome da tabela é `espelhos`, e não `propostas`, de propósito: "proposta" carregou a
+    ambiguidade que originou o ADR-011. Quem implementar não deve construir um documento
+    de venda.
+
+    `approval_id` é `NOT NULL` com foreign key, e é a invariante 3 inteira: **não existe
+    caminho de código que emita sem aprovação**. Se alguém — eu, ou um agente de código —
+    escrever um `INSERT` sem ele, o banco recusa. Um teste tenta exatamente isso.
+    """
+
+    __tablename__ = "espelhos"
+    __table_args__ = (
+        CheckConstraint("preco_centavos > 0", name="ck_espelhos_preco_positivo"),
+        # Uma aprovação emite um espelho, não dois.
+        Index("ux_espelhos_por_aprovacao", "approval_id", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    conversa_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversas.id", ondelete="CASCADE"))
+    chassi: Mapped[str] = mapped_column(ForeignKey("unidades.chassi"))
+    approval_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pedidos_de_aprovacao.id", ondelete="RESTRICT"), nullable=False
+    )
+    preco_centavos: Mapped[int] = mapped_column(BigInteger)
+    numero: Mapped[str] = mapped_column(String(16), unique=True)
+    # O objeto no MinIO, não a URL: a URL é assinada e expira em 15 minutos (ADR-013).
+    # Guardar uma URL aqui seria guardar um link morto.
+    pdf_objeto: Mapped[str] = mapped_column(String(120))
+    valido_ate: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    emitido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)

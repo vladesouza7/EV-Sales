@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.pii import decifrar, redigir
 from app.db import agora
 from app.ia.provedor import ProvedorCompativel, ProvedorIndisponivel, ProvedorLLM
-from app.ia.tools import disponiveis, esquemas, executar
+from app.ia.registro import disponiveis, esquemas, executar
 from app.ia.verificacao import Veredito, permitidos_de, verificar
 from app.modelos import Conversa, Lead, Mensagem, Unidade
 from app.observabilidade import (

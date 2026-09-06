@@ -5,6 +5,12 @@ from collections.abc import Iterator
 os.environ.setdefault("EVSALES_PII_KEY", base64.b64encode(b"k" * 32).decode())
 os.environ.setdefault("EVSALES_PII_PEPPER", base64.b64encode(b"p" * 32).decode())
 os.environ.setdefault("EVSALES_JWT_SECRET", base64.b64encode(b"j" * 32).decode())
+# O Espelho da S-04 é um PDF de verdade num bucket de verdade — o mesmo compromisso que a
+# suíte já faz com o Postgres. Bucket separado: teste não escreve no balde de trabalho.
+os.environ.setdefault("EVSALES_MINIO_ENDPOINT", "localhost:9000")
+os.environ.setdefault("EVSALES_MINIO_ACCESS_KEY", "evsales")
+os.environ.setdefault("EVSALES_MINIO_SECRET_KEY", "evsales-local")
+os.environ.setdefault("EVSALES_MINIO_BUCKET", "evsales-teste")
 os.environ.setdefault(
     "EVSALES_DATABASE_URL",
     "postgresql+psycopg://evsales:evsales@localhost:5432/evsales_test",

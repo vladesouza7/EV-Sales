@@ -17,6 +17,7 @@ landing   chat    trace    Aurora   aprovação reserva  test drive       (fora 
                     │        └──▶ S-06  handoff WhatsApp     desfecho ◀─ 1 toque
                     │
    S-09 (PII) e S-10 (operação) atravessam todas, desde a primeira linha
+   S-11 (autenticação) entra antes da S-04 — três entregas pedem "sessão autenticada"
 ```
 
 A barra dupla é a fronteira do [ADR-011](../adr/ADR-011-jornada-digital-termina-no-test-drive.md):
@@ -30,7 +31,12 @@ S-06 e da S-04 — lembrete, dossiê e desfecho — não veio.
 
 ## As specs
 
-Estado em **6 de setembro de 2026**. "Parcial" sempre diz o que falta, no cabeçalho da própria spec.
+Estado em **6 de setembro de 2026**. "Parcial" sempre diz o que falta, no cabeçalho da própria
+spec.
+
+A [S-11](S-11-autenticacao-e-perfis.md) nasceu depois das outras dez: três entregas exigiam
+"sessão autenticada" e nenhuma dizia o que isso significa. Ambiguidade em spec é decisão
+delegada a quem implementa, e autenticação não é decisão para delegar.
 
 | # | Spec | O que entrega | Estado | Portão de CI |
 |---|---|---|---|---|
@@ -44,6 +50,7 @@ Estado em **6 de setembro de 2026**. "Parcial" sempre diz o que falta, no cabeç
 | [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo e teto sim; as duas telas não | |
 | [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem e máscara sim; retenção não | ✅ varredura de logs |
 | [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose e seed sim; backup, runbook e CI não | |
+| [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ✗ não começada — **spec nova, aguardando revisão** | |
 
 Os cinco ✅ são os portões que **reprovam o build**. Eles existem porque risco sem verificação
 automatizada é desejo, não requisito: enquanto o eval não bloqueia o merge, o ADR envelhece em

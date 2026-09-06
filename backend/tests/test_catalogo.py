@@ -107,9 +107,54 @@ def test_olhar_o_catalogo_nao_cria_lead(cliente: TestClient, sessao: Session) ->
 
 
 def test_landing_tem_a_saida_pelo_lado(cliente: TestClient) -> None:
+    """ADR-010 §2 — a saída existe e leva ao catálogo sem passar por cadastro.
+
+    O link discreto *"prefiro só olhar os carros"* virou o botão "Conheça os modelos"
+    no herói (S-01 §1.3). O que o ADR decidiu é que a saída existe, e é isso que este
+    teste guarda — não a redação de um link.
+    """
     pagina = cliente.get("/")
 
     assert pagina.status_code == 200
-    assert "prefiro só olhar os carros" in pagina.text
+    assert 'href="/catalogo"' in pagina.text
+    assert "Conheça os modelos" in pagina.text
     assert "Sol &amp; Volt" in pagina.text or "Sol & Volt" in pagina.text
     assert "Tambaú" in pagina.text
+
+
+def test_catalogo_continua_sem_cadastro_e_sem_chat(cliente: TestClient) -> None:
+    """A saída só é saída enquanto o catálogo não pedir nada em troca."""
+    pagina = cliente.get("/catalogo")
+
+    assert pagina.status_code == 200
+    assert "/api/leads" not in pagina.text
+    assert 'id="telefone"' not in pagina.text
+
+
+def test_ofertas_e_o_mesmo_estoque_sem_preco_promocional(
+    cliente: TestClient, sessao: Session
+) -> None:
+    """Invariante 2 — não existe desconto no sistema, e a vitrine não pode inventar um.
+
+    A garantia não é a redação do HTML: é que /ofertas lê a mesma tool do catálogo e que
+    a resposta não tem campo nenhum onde um "de/por" poderia morar.
+    """
+    _semear(sessao, SEAL_BRANCO, TAYCAN)
+    pagina = cliente.get("/ofertas")
+
+    assert pagina.status_code == 200
+    assert "/api/catalogo" in pagina.text, "lê a mesma tool do catálogo"
+    assert "de R$" not in pagina.text
+
+    for carro in cliente.get("/api/catalogo").json():
+        assert not {"preco_antigo", "preco_promocional", "desconto"} & set(carro)
+
+
+def test_ofertas_lista_do_menor_para_o_maior_preco(
+    cliente: TestClient, sessao: Session
+) -> None:
+    _semear(sessao, TAYCAN, SEAL_BRANCO)
+
+    precos = [carro["preco_centavos"] for carro in cliente.get("/api/catalogo").json()]
+
+    assert precos == sorted(precos)

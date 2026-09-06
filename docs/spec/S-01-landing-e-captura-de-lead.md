@@ -14,14 +14,35 @@ com a Aurora. Oferece uma saída pelo catálogo somente-leitura para quem não q
 
 ### 1. Estrutura da página
 
-Seção única, dobra inicial, sem rolagem obrigatória até o formulário. Conteúdo, nesta ordem:
+Herói na dobra inicial e formulário logo abaixo, alcançável por qualquer botão do herói.
+Conteúdo, nesta ordem:
 
 1. Marca **Sol & Volt Veículos Elétricos** e a linha "Tambaú, João Pessoa".
 2. Chamada: *"Descubra qual elétrico combina com a sua rotina — em 3 minutos, conversando."*
-3. Card da Aurora, com o texto exato de [ADR-010 §1](../adr/ADR-010-cadastro-antes-do-chat.md#1-o-formulário-entrega-valor-antes-de-pedir).
-4. Formulário: `nome`, `telefone`, botão **"Conversar com a Aurora"**.
-5. Link secundário, sem destaque visual: **"prefiro só olhar os carros"** → `/catalogo`.
-6. Rodapé com aviso de privacidade em uma linha: *"Guardamos só seu nome e WhatsApp. Se pedir, apagamos."*
+   As duas primeiras linhas ficam no `h1`; o *"em 3 minutos, conversando"* fecha na linha de apoio.
+3. Quatro botões de ação, nesta ordem:
+
+   | Botão | Vai para |
+   |---|---|
+   | **Comece agora** | o formulário, com o campo `nome` em foco |
+   | **Conheça os modelos** | `/catalogo` — a saída pelo lado do [ADR-010 §2](../adr/ADR-010-cadastro-antes-do-chat.md) |
+   | **Conheça as ofertas** | `/ofertas` — o mesmo estoque, do menor para o maior preço |
+   | **Confira com um test-drive** | `/test-drive` ([S-07](S-07-test-drive.md)) |
+
+   `/ofertas` **não tem preço promocional**: não existe desconto no sistema (invariante 2,
+   [ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md)), e "oferta" aqui é ordenação
+   por preço, não abatimento. É a mesma tela do catálogo, lendo a mesma tool.
+4. Card da Aurora, com o texto exato de [ADR-010 §1](../adr/ADR-010-cadastro-antes-do-chat.md#1-o-formulário-entrega-valor-antes-de-pedir).
+5. Formulário: `nome`, `telefone`, botão **"Conversar com a Aurora"**, e sob ele a nota de
+   consentimento: *"Ao continuar, você concorda em receber nosso contato pode ficar tranquilo(a)
+   não enviaremos spam ou propagandas desnecessárias."*
+
+   > O link *"prefiro só olhar os carros"* saiu daqui. A mitigação do ADR-010 §2 continua —
+   > catálogo somente-leitura, sem chat e sem cadastro — mas agora é o botão **"Conheça os
+   > modelos"**, no herói, mais visível do que o link discreto que ele substitui. O ADR não muda:
+   > a decisão que ele registra é que a saída existe, não onde ela fica.
+6. Rodapé, em duas linhas: o aviso de privacidade (*"Guardamos só seu nome e WhatsApp. Se pedir,
+   apagamos."*) e a assinatura da casa (*"VLADETEC © 2026 - EV-Sales…"*).
 
 ### 2. Campo `nome`
 

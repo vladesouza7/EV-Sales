@@ -21,8 +21,9 @@
   </header>
 
   <main class="wrap">
-    <h1>O que está na loja hoje</h1>
-    <p class="detalhe">Preço e disponibilidade lidos do estoque agora, não de tabela.</p>
+    <h1 id="titulo">O que está na loja hoje</h1>
+    <p class="detalhe" id="subtitulo">Preço e disponibilidade lidos do estoque agora, não de
+      tabela.</p>
     <div class="carros" id="carros" aria-live="polite"></div>
   </main>
 
@@ -35,6 +36,17 @@
 
   <script src="/static/tema.js"></script>
   <script>
+    // A mesma tela serve /catalogo e /ofertas. Os dados são idênticos porque a fonte é
+    // a mesma tool: em "ofertas" muda a moldura e a ordem de leitura, não o preço —
+    // desconto não existe no sistema (invariante 2, ADR-004).
+    var OFERTAS = location.pathname === "/ofertas";
+    if (OFERTAS) {
+      document.title = "Os mais em conta — Sol & Volt Veículos Elétricos";
+      document.getElementById("titulo").textContent = "Os mais em conta do pátio hoje";
+      document.getElementById("subtitulo").textContent =
+        "Do menor para o maior preço, lido do estoque agora. Sem letra miúda: é o preço de venda.";
+    }
+
     var real = new Intl.NumberFormat("pt-BR", {
       style: "currency", currency: "BRL", maximumFractionDigits: 0
     });
@@ -55,9 +67,10 @@
       return partes.join(" · ");
     }
 
-    function cartao(carro) {
+    function cartao(carro, primeiro) {
       var no = document.createElement("article");
       no.className = "carro";
+      if (OFERTAS && primeiro) no.appendChild(linha("span", "selo", "menor preço do pátio hoje"));
 
       var foto = document.createElement("img");
       foto.alt = "";
@@ -95,7 +108,8 @@
         lista.textContent = "Nenhuma unidade disponível agora.";
         return;
       }
-      carros.forEach(function (carro) { lista.appendChild(cartao(carro)); });
+      // buscar_unidades já devolve por preço crescente: /ofertas é leitura, não reordenação.
+      carros.forEach(function (carro, indice) { lista.appendChild(cartao(carro, indice === 0)); });
     });
   </script>
 </body>

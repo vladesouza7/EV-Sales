@@ -43,15 +43,15 @@
         </h1>
         <p>Em 3 minutos, conversando — com preço e disponibilidade reais, não tabela desatualizada.</p>
 
-        <!-- ponytail: os quatro do protótipo levam ao cadastro por enquanto. Ofertas e test
-             drive ganham destino próprio quando a S-04 e a S-07 existirem. -->
         <div class="botoes">
           <button class="principal compacta" type="button" onclick="irParaCadastro()">
             Comece agora <span aria-hidden="true">→</span>
           </button>
-          <button class="secundaria" type="button" onclick="irParaCadastro()">Conheça os modelos</button>
-          <button class="secundaria" type="button" onclick="irParaCadastro()">Conheça as ofertas</button>
-          <button class="secundaria" type="button" onclick="irParaCadastro()">Confira com um test-drive</button>
+          <!-- A saída pelo lado do ADR-010 §2 mora aqui agora: catálogo somente-leitura,
+               sem chat e sem cadastro, alcançável do herói. -->
+          <a class="secundaria" href="/catalogo">Conheça os modelos</a>
+          <a class="secundaria" href="/ofertas">Conheça as ofertas</a>
+          <a class="secundaria" href="/test-drive">Confira com um test-drive</a>
         </div>
       </section>
 
@@ -80,7 +80,10 @@
           <p class="aviso-erro" id="erro" role="alert"></p>
 
           <button class="principal" type="submit">Conversar com a Aurora</button>
-          <a class="saida-pelo-lado" href="/catalogo">prefiro só olhar os carros</a>
+          <p class="nota-consentimento">
+            Ao continuar, você concorda em receber nosso contato pode ficar tranquilo(a) não
+            enviaremos spam ou propagandas desnecessárias.
+          </p>
         </form>
       </section>
     </main>

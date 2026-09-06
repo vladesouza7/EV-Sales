@@ -761,7 +761,7 @@
                 font-size: 1.2rem;
             }
         }
-    
+
         /* ===== CHAT ===== */
         .chat-container {
             display: flex;
@@ -798,7 +798,7 @@
             font-size: 1.2rem;
             font-weight: 800;
         }
-        
+
         [data-theme="light"] .chat-avatar {
             background: #3f83ff;
             color: #fff;
@@ -877,12 +877,18 @@
             align-items: center;
             justify-content: center;
         }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
 
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
 
@@ -897,11 +903,7 @@
                     <span class="brand-mark">⚡</span>
                     <span>EV-Sales</span>
                 </a>
-                <div class="nav-tags">
 
-                    <span>Concessionária inteligente</span>
-                    <span>Atendimento 24h</span>
-                </div>
             </div>
 
             <div class="nav-actions">
@@ -915,6 +917,11 @@
         <main id="top">
             <!-- HERO -->
             <section class="wrap hero">
+                <div class="nav-tags">
+
+                    <span>Concessionária inteligente</span>
+                    <span>Atendimento 24h</span>
+                </div>
 
                 <h1>
                     <span class="gradient">O futuro</span>
@@ -983,7 +990,8 @@
                     <div class="chat-messages" id="chat-messages">
                     </div>
                     <form class="chat-input-area" onsubmit="sendMessage(event)">
-                        <input id="chat-input" type="text" placeholder="Digite sua mensagem..." autocomplete="off" required />
+                        <input id="chat-input" type="text" placeholder="Digite sua mensagem..." autocomplete="off"
+                            required />
                         <button class="primary" type="submit">Enviar</button>
                     </form>
                 </div>
@@ -1037,7 +1045,7 @@
             var chatContainer = document.getElementById("chat-container");
             if (chatContainer) {
                 chatContainer.style.display = "flex";
-                setTimeout(function() {
+                setTimeout(function () {
                     addMessage("Ola, " + name + "! Bem-vindo(a) a EV-Sales. Como posso te ajudar a escolher seu proximo carro eletrico hoje?", "ia");
                 }, 600);
             }
@@ -1070,7 +1078,7 @@
                 "Maravilha! Voce gostaria de agendar um test-drive?",
                 "A sustentabilidade e o nosso foco. Logo um especialista vai te contatar!"
             ];
-            setTimeout(function() {
+            setTimeout(function () {
                 addMessage(respostas[Math.floor(Math.random() * respostas.length)], "ia");
             }, 900 + Math.random() * 1200);
         }

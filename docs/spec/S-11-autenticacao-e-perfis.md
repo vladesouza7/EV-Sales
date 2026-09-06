@@ -85,24 +85,36 @@ confirma que a conta existe para quem está tentando adivinhar.
 |---|---|
 | Cookie | `ev_staff`, `HttpOnly`, `SameSite=Lax`, `Secure` no perfil `prod` |
 | Token | 32 bytes de `secrets.token_urlsafe`, guardado como `sha256` |
-| Duração | **30 dias**, renovada a cada uso |
-| Inatividade | **30 dias sem uso** encerra |
+| Inatividade | **20 minutos sem uso** encerra a sessão |
+| Renovação | cada requisição autenticada empurra `expira_em` para `agora + 20 min` |
+| Limite absoluto | **12 horas** desde `criada_em`, mesmo em uso contínuo |
 | Revogação | `POST /sair` encerra a atual; o Raí encerra qualquer uma pela tela de usuários |
 
-**Trinta dias é longo de propósito, e é uma decisão de risco, não de conveniência.** A restrição
-que manda aqui é a da [S-04](S-04-fila-de-aprovacao.md): a Neuza decide em 30 segundos, em pé,
-entre dois atendimentos presenciais. Sessão que expira no meio do expediente transforma a
-aprovação em duas etapas, e condição que espera é venda perdida — que é o problema que o produto
-existe para resolver.
+**Vinte minutos é a janela de exposição de um celular perdido**, e é o número que manda nesta
+spec. Um aparelho esquecido no balcão do café vira acesso à fila de aprovação por vinte minutos,
+não por um mês.
 
-O que compensa o prazo longo não é a sessão ser curta, é a decisão ficar registrada: a
-[S-04](S-04-fila-de-aprovacao.md) grava `decidido_por` e `decidido_em` em todo pedido, e o
-[ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md) já recusou aprovação sem tela
-autenticada. **Sessão longa com trilha completa é auditável; sessão curta sem trilha não é.**
+O preço é real e está aqui para ser lido: a aprovação chega por notificação, em horários
+espalhados pelo dia, e a Neuza vai encontrar a tela de login **na maioria das vezes** em que tocar
+no link. O orçamento de 30 segundos da [S-04](S-04-fila-de-aprovacao.md) passa a incluir digitar a
+senha. Isso torna duas coisas obrigatórias, e não opcionais:
 
-Aprovar **não pede senha de novo**. Pedir transformaria os 30 segundos em dois minutos, e o
-[ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md) já decidiu que a proteção do
-irreversível é a pausa humana, não a fricção da pausa humana.
+1. **O destino tem de sobreviver ao login** (§7). Cair na fila genérica depois de autenticar, e
+   ter de achar o card certo, é o que transformaria 30 segundos em dois minutos.
+2. **O campo de senha aceita preenchimento automático do gerenciador do celular** — `autocomplete`
+   correto, sem bloqueio de colar. Bloquear colar em nome de segurança é o que faz a senha virar
+   curta e digitável.
+
+Vinte minutos também **casa com o relógio do pedido**: a [S-04 §2](S-04-fila-de-aprovacao.md) dá
+`expira_em = agora + 20 min` ao pedido de aprovação. Sessão e pedido morrem na mesma escala, então
+não existe o caso de uma sessão viva apontando para um pedido morto há horas.
+
+O limite absoluto de 12 horas existe porque renovação a cada uso, sozinha, é sessão eterna: um
+aparelho usado a cada dezenove minutos nunca expiraria. Doze horas é um expediente. **É a única
+regra desta tabela que não foi pedida — diga se quer fora.**
+
+Aprovar **não pede senha de novo** dentro da janela. A proteção do irreversível é a pausa humana
+registrada — `decidido_por` e `decidido_em` em todo pedido ([ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md)) —, não repetir a senha a cada toque.
 
 ### 5. O que cada perfil alcança
 
@@ -142,7 +154,9 @@ nomeia. Esta spec não cria um quarto: a tela do vendedor **é** o terceiro.
 ### 7. O link de uso único da S-04
 
 A notificação da Neuza traz `https://…/a/7K2M` ([S-04 §3](S-04-fila-de-aprovacao.md)). O link
-**leva ao card certo, não substitui o login**:
+**leva ao card certo, não substitui o login** — e com a sessão de 20 minutos da §4, passar pelo
+login é o caminho **normal**, não a exceção. É por isso que o passo 1 abaixo é a parte que não
+pode falhar:
 
 1. Sem sessão → página de login, guardando o destino.
 2. Depois de entrar → vai direto para aquele pedido.
@@ -168,11 +182,27 @@ torna "perdi o celular" resolvível pelo próprio dono da conta, sem esperar o R
 ## Critérios de aceite
 
 ```gherkin
-Cenário: a Neuza entra e aprova sem digitar senha de novo
-  Dado que a Neuza tem sessão válida no celular
+Cenário: dentro da janela, aprovar não repede senha
+  Dado que a Neuza usou o sistema há menos de 20 minutos
   Quando ela abre a fila de aprovação e toca em APROVAR
   Então a aprovação é registrada com "decidido_por" preenchido com o id dela
   E nenhuma senha foi pedida no caminho
+
+Cenário: vinte minutos parada encerra a sessão
+  Dado que a última requisição da Neuza foi há 21 minutos
+  Quando ela abre a fila de aprovação
+  Então a resposta é a página de login
+  E a sessão anterior não é renovada
+
+Cenário: uso contínuo renova, mas não para sempre
+  Dado uma sessão criada há 11 horas e usada a cada 5 minutos
+  Então ela continua valendo
+  Mas uma hora depois, mesmo em uso, ela é recusada pelo limite de 12 horas
+
+Cenário: expirar no meio não perde o destino
+  Dado que a Neuza toca no link do WhatsApp com a sessão expirada
+  Quando ela entra com a senha
+  Então ela cai no card daquele pedido, não na fila genérica
 
 Cenário: e-mail inexistente e senha errada respondem igual
   Quando alguém tenta entrar com um e-mail que não existe

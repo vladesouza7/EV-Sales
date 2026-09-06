@@ -15,8 +15,9 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
+    literal_column,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, ExcludeConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.pii import decifrar, mascarar_nome, mascarar_telefone
@@ -27,6 +28,7 @@ ETAPAS = (
     "aguardando_aprovacao", "reserva", "test_drive", "humano", "encerrada",
 )  # fmt: skip
 STATUS_UNIDADE = ("disponivel", "reservado", "vendido", "indisponivel")
+STATUS_TEST_DRIVE = ("agendado", "confirmado", "realizado", "nao_compareceu", "cancelado")
 # S-03 §1. Fonte fora desta lista não entra: WLTP e Inmetro só não se confundem
 # enquanto o rótulo tiver uma grafia só (invariante 6).
 FONTES_DE_AUTONOMIA = ("INMETRO_PBEV_2026", "WLTP", "FABRICANTE")
@@ -80,6 +82,8 @@ class Conversa(Base):
     atendente_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
     qualificacao: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     chassi_em_foco: Mapped[str | None] = mapped_column(String(17), default=None)
+    # S-07 §4.4 — o que a conversa virou. Só o test drive preenche por enquanto.
+    desfecho: Mapped[str | None] = mapped_column(String(30), default=None)
     trace_id: Mapped[str | None] = mapped_column(String(64), default=None)
     token_sessao: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     token_expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -163,3 +167,71 @@ class Mensagem(Base):
     processada_em: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )
+
+
+class Vendedor(Base):
+    """Tarcísio e Jaqueline. O telefone é PII como qualquer outro (ADR-007)."""
+
+    __tablename__ = "vendedores"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(60), unique=True)
+    telefone_cifrado: Mapped[bytes] = mapped_column(LargeBinary)
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class AgendaBloqueio(Base):
+    """Férias, folga, compromisso pessoal. Some da agenda como se fosse test drive."""
+
+    __tablename__ = "agenda_bloqueios"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    vendedor_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("vendedores.id", ondelete="CASCADE"), index=True
+    )
+    inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fim: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    motivo: Mapped[str] = mapped_column(String(60))
+
+
+class TestDrive(Base):
+    """S-07 §1 — a garantia de não haver dois no mesmo horário é do banco, não do Python.
+
+    Os dois `EXCLUDE` abaixo são o motivo de a S-07 existir como spec e não como
+    formulário: um `SELECT` que confere e um `INSERT` depois deixam a janela aberta
+    entre os dois. O índice fecha a janela dentro da transação, como a reserva de
+    chassi da S-05 (ADR-001). A consulta de horários em Python é só para **oferecer** —
+    quem **decide** é a constraint.
+    """
+
+    __tablename__ = "test_drives"
+    __table_args__ = (
+        CheckConstraint(f"status IN {STATUS_TEST_DRIVE}", name="ck_test_drives_status"),
+        CheckConstraint("fim > inicio", name="ck_test_drives_intervalo_positivo"),
+        # Cancelado não ocupa horário — senão desmarcar não devolveria a vaga.
+        ExcludeConstraint(
+            (literal_column("vendedor_id"), "="),
+            (literal_column("tstzrange(inicio, fim)"), "&&"),
+            name="ex_test_drives_vendedor",
+            using="gist",
+            where=literal_column("status <> 'cancelado'"),
+        ),
+        ExcludeConstraint(
+            (literal_column("chassi"), "="),
+            (literal_column("tstzrange(inicio, fim)"), "&&"),
+            name="ex_test_drives_chassi",
+            using="gist",
+            where=literal_column("status <> 'cancelado'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    conversa_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversas.id", ondelete="CASCADE"))
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id", ondelete="CASCADE"))
+    chassi: Mapped[str] = mapped_column(ForeignKey("unidades.chassi"))
+    vendedor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("vendedores.id"))
+    inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    fim: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(16), default="agendado")
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    confirmado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)

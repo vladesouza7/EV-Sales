@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agendar test drive — Sol &amp; Volt Veículos Elétricos</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+</head>
+
+<body>
+  <div class="pagina">
+    <div class="grade" aria-hidden="true"></div>
+
+    <header class="wrap nav">
+      <a class="marca" href="/">
+        <span class="marca-simbolo">⚡</span>
+        <span>
+          <b>Sol &amp; Volt Veículos Elétricos</b>
+          <small>Tambaú, João Pessoa</small>
+        </span>
+      </a>
+      <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+    </header>
+
+    <main class="wrap chamada">
+      <div>
+        <h1>Dirigir é o que decide.</h1>
+        <div class="aurora">
+          <strong>45 minutos com o carro, e com quem conhece ele.</strong>
+          Escolha o carro e o dia: eu mostro só os horários que existem de verdade na agenda do
+          Tarcísio e da Jaqueline — e já digo qual dos dois vai com você.
+          <em>Leve sua CNH no dia. A gente confere no balcão e não guarda cópia de documento.</em>
+        </div>
+      </div>
+
+      <form class="formulario" id="formulario" onsubmit="marcar(event)">
+        <label for="chassi">Qual carro</label>
+        <select id="chassi" required onchange="carregarHorarios()"></select>
+
+        <label for="dia">Que dia</label>
+        <input id="dia" type="date" required onchange="carregarHorarios()" />
+
+        <p class="detalhe" id="janela">
+          Seg a sex, 9h–18h · sábado até 13h · com no mínimo 2 horas de antecedência.
+        </p>
+
+        <div id="horarios" class="horarios" role="radiogroup" aria-label="Horários"></div>
+
+        <label for="nome">Seu nome</label>
+        <input id="nome" maxlength="80" required placeholder="Como a gente te chama?" />
+
+        <label for="telefone">Seu WhatsApp</label>
+        <input id="telefone" type="tel" inputmode="tel" maxlength="15" required
+          placeholder="(00) 00000-0000" />
+
+        <p class="aviso-erro" id="erro" role="alert"></p>
+
+        <button class="principal" type="submit" id="enviar" disabled>Escolha um horário</button>
+        <p class="nota-consentimento">
+          Ao continuar, você concorda em receber nosso contato pode ficar tranquilo(a) não
+          enviaremos spam ou propagandas desnecessárias.
+        </p>
+      </form>
+
+      <div class="confirmacao" id="confirmacao" hidden></div>
+    </main>
+
+    <footer class="wrap rodape">
+      <span class="privacidade">Guardamos só seu nome e WhatsApp. Se pedir, apagamos.</span>
+      <span>VLADETEC © 2026 - <strong>EV-Sales</strong>. Tecnologia e Inteligência na Mobilidade
+        que inspira.</span>
+      <span>Feito para quem pensa no amanhã.</span>
+    </footer>
+  </div>
+
+  <script src="/static/tema.js"></script>
+  <script>
+    var escolhido = null;
+    var telefone = document.getElementById("telefone");
+    var horarios = document.getElementById("horarios");
+    var enviar = document.getElementById("enviar");
+    var erro = document.getElementById("erro");
+
+    telefone.addEventListener("input", function () {
+      var d = this.value.replace(/\D/g, "");
+      if (d.length > 11 && d.slice(0, 2) === "55") d = d.slice(2);
+      d = d.slice(0, 11);
+      if (d.length > 6) {
+        this.value = "(" + d.slice(0, 2) + ") " + d.slice(2, 7) + "-" + d.slice(7);
+      } else if (d.length > 2) {
+        this.value = "(" + d.slice(0, 2) + ") " + d.slice(2);
+      } else {
+        this.value = d;
+      }
+    });
+
+    var real = new Intl.NumberFormat("pt-BR", {
+      style: "currency", currency: "BRL", maximumFractionDigits: 0
+    });
+
+    // O carro vem da mesma tool do catálogo: nada aqui é digitado à mão.
+    fetch("/api/catalogo").then(function (r) { return r.json(); }).then(function (carros) {
+      var select = document.getElementById("chassi");
+      var pedido = new URLSearchParams(location.search).get("chassi");
+      carros.forEach(function (carro) {
+        var opcao = document.createElement("option");
+        opcao.value = carro.chassi;
+        opcao.textContent = carro.marca + " " + carro.modelo + " " + carro.versao
+          + " · " + carro.cor + " · " + real.format(carro.preco_centavos / 100);
+        if (carro.chassi === pedido) opcao.selected = true;
+        select.appendChild(opcao);
+      });
+      if (!carros.length) {
+        erro.textContent = "Não temos carro disponível para test drive agora.";
+        return;
+      }
+      carregarHorarios();
+    });
+
+    async function carregarHorarios() {
+      escolhido = null;
+      atualizarBotao();
+      horarios.textContent = "";
+      var chassi = document.getElementById("chassi").value;
+      if (!chassi) return;
+
+      var url = "/api/agenda?chassi=" + encodeURIComponent(chassi);
+      var dia = document.getElementById("dia").value;
+      if (dia) url += "&dia=" + dia;
+
+      var opcoes = await (await fetch(url)).json();
+      if (!opcoes.length) {
+        horarios.appendChild(aviso("Nada livre nesse dia. Tenta outra data?"));
+        return;
+      }
+      opcoes.forEach(function (opcao) {
+        var botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = "horario";
+        botao.innerHTML = "<b></b><span></span>";
+        botao.querySelector("b").textContent = opcao.rotulo;
+        botao.querySelector("span").textContent = "com " + opcao.vendedor;
+        botao.onclick = function () {
+          escolhido = opcao;
+          Array.prototype.forEach.call(horarios.children, function (outro) {
+            outro.classList.remove("marcado");
+          });
+          botao.classList.add("marcado");
+          atualizarBotao();
+        };
+        horarios.appendChild(botao);
+      });
+    }
+
+    function aviso(texto) {
+      var p = document.createElement("p");
+      p.className = "detalhe";
+      p.textContent = texto;
+      return p;
+    }
+
+    function atualizarBotao() {
+      enviar.disabled = !escolhido;
+      enviar.textContent = escolhido
+        ? "Confirmar " + escolhido.rotulo.toLowerCase()
+        : "Escolha um horário";
+    }
+
+    async function marcar(evento) {
+      evento.preventDefault();
+      erro.textContent = "";
+      if (!escolhido) return;
+
+      var resposta = await fetch("/api/test-drives", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome: document.getElementById("nome").value,
+          telefone: telefone.value,
+          chassi: document.getElementById("chassi").value,
+          inicio: escolhido.inicio
+        })
+      });
+
+      if (!resposta.ok) {
+        var corpo = await resposta.json().catch(function () { return null; });
+        erro.textContent = mensagemDeErro(corpo);
+        carregarHorarios();
+        return;
+      }
+      mostrarConfirmacao(await resposta.json());
+    }
+
+    function mostrarConfirmacao(dados) {
+      var caixa = document.getElementById("confirmacao");
+      caixa.innerHTML = "";
+      caixa.appendChild(linha("h2", "", "✅ Test drive agendado!"));
+      caixa.appendChild(linha("p", "", "📅 " + dados.quando));
+      caixa.appendChild(linha("p", "", "🚗 " + dados.carro));
+      caixa.appendChild(linha("p", "", "📍 " + dados.endereco));
+      caixa.appendChild(linha("p", "", "👤 Com " + (dados.vendedor === "Jaqueline" ? "a " : "o ")
+        + dados.vendedor));
+      caixa.appendChild(linha("p", "detalhe", dados.lembrete));
+      caixa.hidden = false;
+      document.getElementById("formulario").hidden = true;
+      caixa.scrollIntoView({ behavior: "smooth" });
+    }
+
+    function linha(tag, classe, texto) {
+      var no = document.createElement(tag);
+      if (classe) no.className = classe;
+      no.textContent = texto;
+      return no;
+    }
+
+    function mensagemDeErro(corpo) {
+      var detalhe = corpo && corpo.detail;
+      if (typeof detalhe === "string") return detalhe;
+      if (detalhe && detalhe.mensagem) return detalhe.mensagem;
+      if (Array.isArray(detalhe) && detalhe.length) return detalhe[0].msg;
+      return "Não consegui agendar agora. Tenta de novo?";
+    }
+  </script>
+</body>
+
+</html>

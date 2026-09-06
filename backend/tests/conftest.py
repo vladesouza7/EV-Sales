@@ -11,6 +11,7 @@ os.environ.setdefault(
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db import Base, engine  # noqa: E402
@@ -20,6 +21,9 @@ from app.main import app  # noqa: E402
 
 @pytest.fixture(scope="session", autouse=True)
 def _schema() -> Iterator[None]:
+    # Os EXCLUDE da S-07 são gist sobre uuid e text: sem btree_gist o create_all falha.
+    with engine.begin() as conexao:
+        conexao.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield

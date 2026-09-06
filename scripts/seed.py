@@ -17,8 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from sqlalchemy.dialects.postgresql import insert  # noqa: E402
 
+from app.core.pii import cifrar  # noqa: E402
 from app.db import Sessao  # noqa: E402
-from app.modelos import Unidade  # noqa: E402
+from app.modelos import Unidade, Vendedor  # noqa: E402
 
 UNIDADES = [
     dict(
@@ -125,14 +126,33 @@ UNIDADES = [
 ]
 
 
+# S-07 — a equipe da Sol & Volt. Telefones fictícios e cifrados como qualquer outro
+# (ADR-007): vendedor é PII também.
+VENDEDORES = [
+    ("Jaqueline", "+5583988710002"),
+    ("Tarcísio", "+5583988710001"),
+]
+
+
 def semear() -> None:
     with Sessao() as sessao:
         sessao.execute(
             insert(Unidade).values(UNIDADES).on_conflict_do_nothing(index_elements=["chassi"])
         )
+        sessao.execute(
+            insert(Vendedor)
+            .values(
+                [
+                    dict(nome=nome, telefone_cifrado=cifrar(telefone), ativo=True)
+                    for nome, telefone in VENDEDORES
+                ]
+            )
+            .on_conflict_do_nothing(index_elements=["nome"])
+        )
         sessao.commit()
         total = sessao.query(Unidade).count()
-    print(f"seed ok · {total} unidades no estoque")
+        equipe = sessao.query(Vendedor).count()
+    print(f"seed ok · {total} unidades no estoque · {equipe} vendedores na agenda")
 
 
 if __name__ == "__main__":

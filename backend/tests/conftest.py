@@ -4,6 +4,7 @@ from collections.abc import Iterator
 
 os.environ.setdefault("EVSALES_PII_KEY", base64.b64encode(b"k" * 32).decode())
 os.environ.setdefault("EVSALES_PII_PEPPER", base64.b64encode(b"p" * 32).decode())
+os.environ.setdefault("EVSALES_JWT_SECRET", base64.b64encode(b"j" * 32).decode())
 os.environ.setdefault(
     "EVSALES_DATABASE_URL",
     "postgresql+psycopg://evsales:evsales@localhost:5432/evsales_test",

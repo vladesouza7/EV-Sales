@@ -1,23 +1,29 @@
 """Aplicação da Sol & Volt: S-01 (landing, lead, catálogo), S-02 (chat) e S-07 (agenda)."""
 
 import logging
+import uuid
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.responses import Response as RespostaCrua
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.arquivos import NomeInvalido, caminho_da_foto, ler
+from app.autenticacao import Autenticado
+from app.autenticacao import router as rotas_de_autenticacao
 from app.conversas import router as rotas_de_conversa
+from app.core.pii import decifrar
 from app.db import obter_sessao
 from app.ia.tools.estoque import buscar_unidades
 from app.ia.turno import PROVEDOR
 from app.leads import LeadEntrada, abrir_conversa, gravar_cookie
+from app.modelos import Conversa, Lead
+from app.observabilidade import registrar
 from app.testdrive import router as rotas_de_test_drive
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
@@ -28,6 +34,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message
 
 app = FastAPI(title="EV-Sales — Sol & Volt")
 app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
+app.include_router(rotas_de_autenticacao)
 app.include_router(rotas_de_conversa)
 app.include_router(rotas_de_test_drive)
 
@@ -73,6 +80,39 @@ def foto(nome: str) -> RespostaCrua:
     bytes_, tipo = conteudo
     # Foto de carro não muda; o catálogo é a página mais aberta do site.
     return RespostaCrua(bytes_, media_type=tipo, headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/api/leads/{lead_id}/telefone")
+def telefone_do_lead(
+    lead_id: uuid.UUID, usuario: Autenticado, sessao: BancoDeDados
+) -> dict[str, str]:
+    """S-11 §6 e S-09 §5 — o terceiro chamador autorizado de `decifrar`.
+
+    O recorte do vendedor é `WHERE`, não filtro de tela: a consulta já sai do banco
+    restrita, porque filtrar depois de ler significa que o lead do outro chegou a existir
+    no processo — e é assim que um dia ele aparece num log de erro.
+    """
+    consulta = select(Lead).where(Lead.id == lead_id)
+    if usuario.perfil == "vendedor":
+        consulta = consulta.join(Conversa, Conversa.lead_id == Lead.id).where(
+            Conversa.atendente_id == usuario.vendedor_id
+        )
+    lead = sessao.scalars(consulta).first()
+    if lead is None:
+        # 404 também para "existe, mas não é seu".
+        raise HTTPException(404, detail={"mensagem": "Não encontrado."})
+
+    # A linha de auditoria registra o ACESSO. O número não entra nela: guardar o telefone
+    # dentro do registro de quem viu o telefone seria uma segunda cópia da PII, no lugar
+    # mais fácil de esquecer (S-11 §6).
+    registrar(
+        sessao,
+        None,
+        "evento",
+        "telefone_visto",
+        dados={"usuario_id": str(usuario.id), "lead_id": str(lead.id)},
+    )
+    return {"telefone": decifrar(lead.telefone_cifrado)}
 
 
 @app.get("/health", include_in_schema=False)

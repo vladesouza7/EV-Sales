@@ -3,7 +3,18 @@
 **Depende de:** [S-01](S-01-landing-e-captura-de-lead.md) (o padrão de cookie e sessão já existe lá)
 **Bloqueia:** [S-04](S-04-fila-de-aprovacao.md), [S-08 §4 e §5](S-08-observabilidade-e-custo.md), [S-07 §9](S-07-test-drive.md)
 **Decide por:** [ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md), [ADR-007](../adr/ADR-007-pii-cifrada-e-mascarada.md)
-**Estado:** ✗ não começada — esta spec existe porque três entregas pediam "sessão autenticada" e nenhuma dizia o que isso é
+**Estado:** ◐ parcial — esta spec existe porque três entregas pediam "sessão autenticada" e nenhuma
+dizia o que isso é.
+
+| § | O quê | Estado |
+|---|---|---|
+| §1, §2 | `usuarios`, sem tabela de sessões | ✔ `app/modelos.py` |
+| §3 | Login, resposta única, bloqueio em 5 tentativas | ✔ `app/autenticacao.py` |
+| §4 | JWT de 20 min, renovação, teto de 12 h, revogação | ✔ idem |
+| §5 | Perfis por rota | ✔ o mecanismo (`Dono`, 404 em vez de 403); **as telas são da [S-04](S-04-fila-de-aprovacao.md) e da [S-08](S-08-observabilidade-e-custo.md)** |
+| §6 | Ver telefone deixa rastro | ✔ `GET /api/leads/{id}/telefone`, com o recorte do vendedor na query |
+| §7 | Link de uso único da S-04 | ✗ depende da [S-04](S-04-fila-de-aprovacao.md), que cria o pedido |
+| §8 | Criar usuário e trocar senha | ✔ `scripts/criar-usuario.py`, `/api/minha-senha`, `/api/usuarios` |
 
 ---
 

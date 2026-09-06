@@ -50,7 +50,7 @@ delegada a quem implementa, e autenticação não é decisão para delegar.
 | [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo e teto sim; as duas telas não | |
 | [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem e máscara sim; retenção não | ✅ varredura de logs |
 | [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose e seed sim; backup, runbook e CI não | |
-| [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ✗ não começada — **spec nova, aguardando revisão** | |
+| [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ◐ parcial — login, sessão e perfis sim; as telas são da S-04 e da S-08 | |
 
 Os cinco ✅ são os portões que **reprovam o build**. Eles existem porque risco sem verificação
 automatizada é desejo, não requisito: enquanto o eval não bloqueia o merge, o ADR envelhece em

@@ -301,3 +301,54 @@ class Incidente(Base):
     gravidade: Mapped[str] = mapped_column(String(12))
     dados: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+
+class Usuario(Base):
+    """S-11 §1 — quatro pessoas nomeadas numa loja em Tambaú.
+
+    Quatro é o número que justifica **não** ter cadastro público, convite por e-mail, SSO
+    nem papel configurável em banco. Cada uma dessas coisas seria código a manter para um
+    problema que a Sol & Volt não tem.
+
+    Não há tabela de sessões: a sessão é um JWT de 20 minutos, e a revogação é o carimbo
+    `sessoes_validas_apos` comparado com o `iat` do token (S-11 §2 e §4).
+    """
+
+    __tablename__ = "usuarios"
+    __table_args__ = (
+        CheckConstraint(
+            "perfil IN ('dono', 'gerente', 'vendedor')", name="ck_usuarios_perfil"
+        ),
+        # O vendedor é o único perfil que atende lead, e o recorte da S-11 §5 depende deste
+        # vínculo existir. Deixar a regra em Python permitiria um vendedor sem vendedor_id,
+        # e o `WHERE vendedor_id = :usuario` devolveria a lista vazia em silêncio.
+        CheckConstraint(
+            "(perfil = 'vendedor') = (vendedor_id IS NOT NULL)",
+            name="ck_usuarios_vendedor_tem_vinculo",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(60))
+    email: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    senha_hash: Mapped[str] = mapped_column(String(200))
+    perfil: Mapped[str] = mapped_column(String(10))
+    vendedor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("vendedores.id", ondelete="RESTRICT"), default=None
+    )
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    senha_trocada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    tentativas_falhas: Mapped[int] = mapped_column(Integer, default=0)
+    bloqueado_ate: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    # Token emitido antes deste instante é recusado. É a revogação inteira, em uma coluna
+    # — e ela é por usuário, não por dispositivo (S-11 §2, consequência aceita).
+    sessoes_validas_apos: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+
+    def __repr__(self) -> str:
+        """Sem e-mail: é identificador pessoal, e `logger.info(f"{usuario}")` acontece."""
+        return f"<Usuario {self.id} {self.perfil}>"

@@ -1,25 +1,31 @@
-"""S-02 §3 — o turno: gera, verifica, e só então grava e entrega.
+"""S-02 §3 e S-03 — o turno: gera, verifica, e só então grava e entrega.
 
-O modelo entra na S-03. O que a S-02 fixa é a **ordem**, e é ela que protege o Raí:
-nenhum token sai antes da verificação numérica passar (ADR-003), e a mensagem só passa
-a existir em `mensagens` depois de aprovada. Trocar a geração provisória por uma
-chamada ao modelo não pode mudar essa ordem — se mudar, o texto reprovado vaza.
+A ordem é a proteção, e ela não mudou quando o modelo entrou: nenhum token sai antes da
+verificação numérica passar (ADR-003), e a mensagem só passa a existir em `mensagens`
+depois de aprovada. Texto reprovado não é gravado, não é fatiado e não aparece no evento
+de erro — nem parcialmente.
 
-A S-08 acrescentou o que envolve essa ordem: o teto de custo é conferido **antes** de
-qualquer coisa acontecer, e cada passo do turno deixa linha na trilha (ADR-006). A
-instrumentação veio primeiro de propósito — quando a S-03 ligar o modelo, o lugar onde
-o prompt, a tool e o veredito são gravados já existe.
+Sem framework de orquestração (ADR-009): o estado é a linha no banco, o loop é um `while`
+com teto, e a etapa decide as tools. Uma máquina de estados que cabe na cabeça de quem for
+depurar isso às onze da noite.
 """
 
+import json
+import logging
 import time
+import uuid
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.pii import decifrar, redigir
 from app.db import agora
-from app.ia.etapas import tools_da_etapa
-from app.ia.tools.estoque import buscar_unidades
-from app.modelos import Conversa, Mensagem
+from app.ia.provedor import OpenRouterLLM, ProvedorIndisponivel, ProvedorLLM
+from app.ia.tools import disponiveis, esquemas, executar
+from app.ia.verificacao import Veredito, permitidos_de, verificar
+from app.modelos import Conversa, Lead, Mensagem, Unidade
 from app.observabilidade import (
     MENSAGEM_NO_TETO,
     marcar_se_conversa_cara,
@@ -28,30 +34,47 @@ from app.observabilidade import (
     registrar_incidente,
 )
 
+logger = logging.getLogger(__name__)
+
 Evento = tuple[str, dict[str, object]]
 
-# ponytail: resposta fixa até a S-03 ligar o modelo. Não cita número nenhum de
-# propósito — enquanto a verificação da §4 é um stub, texto sem número é o único
-# texto que não pode estar errado.
-RESPOSTA_PROVISORIA = (
-    "Oi! Sou a Aurora, consultora da Sol & Volt, aqui em Tambaú. "
-    "Me conta como você usa o carro no dia a dia que eu já vejo o que temos na loja."
-)
+VERSAO_DO_PROMPT = "aurora_v1"
+_PROMPT = (Path(__file__).parent / "prompts" / f"{VERSAO_DO_PROMPT}.md").read_text("utf-8")
+
+# S-03 §6 — os tetos do loop. Estourar não é erro: é o turno terminando com o que tem.
+MAX_TOOL_CALLS = 6
+MAX_REGENERACOES = 1
+MENSAGENS_DE_HISTORICO = 20
+# S-03 §3 — no máximo 2 perguntas antes da primeira recomendação. A regra é de código:
+# no prompt ela dependeria de o modelo saber contar as próprias perguntas.
+MAX_MENSAGENS_EM_QUALIFICACAO = 3
 
 PEDIDO_DESCULPA = (
     "Deixa eu chamar um dos nossos consultores pra te responder isso com precisão. "
     "Já já alguém fala com você por aqui."
 )
 
+ORIENTACAO_POR_ETAPA = {
+    "saudacao": "Cumprimente pelo nome e pergunte uma coisa só sobre o uso do carro.",
+    "qualificacao": "Descubra o uso e a rotina. Uma pergunta por mensagem, duas no total.",
+    "recomendacao": "Mostre no máximo 3 carros do estoque, sempre consultando as tools antes.",
+    "objecao": "Responda com número que veio de tool. Sem tool, diga que vai confirmar.",
+    "condicao": "O cliente escolheu um carro. Quem aprova condição é a Neuza.",
+    "aguardando_aprovacao": "Você está esperando a Neuza. Não prometa nada enquanto isso.",
+    "reserva": "A condição foi aprovada. Confirme o carro reservado.",
+    "test_drive": "Combine dia e horário do test drive.",
+    "humano": "Um vendedor assumiu a conversa.",
+    "encerrada": "A conversa terminou.",
+}
 
-def verificar_numeros(texto: str, permitidos: set[object]) -> bool:
-    """S-03 §4 — extração por regex e conferência contra os retornos de tool do turno.
+# ponytail: uma instância de módulo. O provedor não guarda estado por conversa, e trocar
+# por injeção de dependência só teria valor quando houvesse mais de uma implementação.
+PROVEDOR: ProvedorLLM = OpenRouterLLM()
 
-    Aqui só existe o ponto de chamada, no lugar certo da ordem. A S-03 preenche o
-    corpo; o que a S-02 garante é que ele é chamado **antes** da gravação e antes do
-    primeiro `token`.
-    """
-    return True
+
+def verificar_numeros(texto: str, permitidos: set[tuple[str, float]], do_cliente: str) -> Veredito:
+    """S-03 §4, no lugar certo da ordem: antes da gravação e antes do primeiro token."""
+    return verificar(texto, permitidos, do_cliente)
 
 
 def _fatiar(texto: str) -> Iterator[str]:
@@ -64,13 +87,108 @@ def _fatiar(texto: str) -> Iterator[str]:
         yield pedaco + " "
 
 
-def _proxima_etapa(etapa: str) -> str:
-    """S-02 §2 — transição por regra de código. `saudacao` é a primeira mensagem, só."""
-    return "qualificacao" if etapa == "saudacao" else etapa
+def _primeiro_nome(sessao: Session, conversa: Conversa) -> str:
+    """S-09 §4: no prompt entra o primeiro nome, e só. O telefone não entra nunca."""
+    lead = sessao.get(Lead, conversa.lead_id)
+    if lead is None:
+        return "cliente"
+    try:
+        return decifrar(lead.nome_cifrado).split()[0]
+    except Exception:
+        return "cliente"
 
 
-def _ms(desde: float) -> int:
-    return int((time.monotonic() - desde) * 1000)
+def _sistema(sessao: Session, conversa: Conversa) -> str:
+    return _PROMPT.format(
+        etapa=conversa.etapa,
+        orientacao_da_etapa=ORIENTACAO_POR_ETAPA[conversa.etapa],
+        qualificacao=json.dumps(conversa.qualificacao, ensure_ascii=False) or "nada ainda",
+        primeiro_nome=_primeiro_nome(sessao, conversa),
+    )
+
+
+def _do_cliente(conteudo: str) -> str:
+    """S-03 §7 — a mensagem entra rotulada e delimitada.
+
+    Isto é reforço, não garantia. A garantia é que a tool de desconto não existe e que as
+    demais são filtradas por etapa: um pedido de 30% não tem função para chamar.
+    """
+    return f"<mensagem_do_cliente>\n{redigir(conteudo)}\n</mensagem_do_cliente>"
+
+
+def _historico(sessao: Session, conversa: Conversa) -> list[dict[str, object]]:
+    anteriores = sessao.scalars(
+        select(Mensagem)
+        .where(Mensagem.conversa_id == conversa.id, Mensagem.processada_em.isnot(None))
+        .order_by(Mensagem.criada_em.desc(), Mensagem.id)
+        .limit(MENSAGENS_DE_HISTORICO)
+    ).all()
+    return [
+        {
+            "role": "assistant" if m.direcao == "saida" else "user",
+            "content": m.conteudo if m.direcao == "saida" else _do_cliente(m.conteudo),
+        }
+        for m in reversed(anteriores)
+    ]
+
+
+def _modelo_citado(sessao: Session, texto: str) -> bool:
+    """Persona 3 (Dr. Almir): quem já disse o modelo e pediu preço não é interrogado.
+
+    Regra de código, não de prompt — a S-03 §3 exige pular a qualificação, e depender do
+    modelo para reconhecer a própria pressa é depender justamente do que falha sob pressa.
+    """
+    minusculo = texto.lower()
+    modelos = sessao.scalars(
+        select(Unidade.modelo).where(Unidade.status == "disponivel").distinct()
+    )
+    return any(modelo.lower() in minusculo for modelo in modelos)
+
+
+def _resumo(nome: str, resultado: object) -> str:
+    if isinstance(resultado, list):
+        return f"{len(resultado)} unidades"
+    if isinstance(resultado, dict) and isinstance(resultado.get("unidades"), list):
+        return f"{len(resultado['unidades'])} unidades"
+    return nome.replace("_", " ")
+
+
+def _fichas_do(resultado: object) -> list[dict[str, object]]:
+    """O que a tool devolveu, em forma de ficha, para alimentar os números permitidos."""
+    if isinstance(resultado, list):
+        return [f for f in resultado if isinstance(f, dict)]
+    if isinstance(resultado, dict):
+        internas = resultado.get("unidades")
+        if isinstance(internas, list):
+            return [f for f in internas if isinstance(f, dict)]
+        return [resultado] if "preco_centavos" in resultado else []
+    return []
+
+
+def _entradas(sessao: Session, conversa_id: uuid.UUID) -> int:
+    return len(
+        sessao.scalars(
+            select(Mensagem.id).where(
+                Mensagem.conversa_id == conversa_id, Mensagem.direcao == "entrada"
+            )
+        ).all()
+    )
+
+
+def _etapa_antes_do_turno(sessao: Session, conversa: Conversa, entrada: Mensagem) -> None:
+    if conversa.etapa in ("saudacao", "qualificacao") and _modelo_citado(sessao, entrada.conteudo):
+        conversa.etapa = "recomendacao"
+
+
+def _etapa_depois_do_turno(sessao: Session, conversa: Conversa) -> None:
+    """ADR-009: a transição é regra de código. O modelo nunca declara que mudou de etapa —
+    se pudesse, escolheria as tools do turno seguinte."""
+    if conversa.etapa == "saudacao":
+        conversa.etapa = "qualificacao"
+    elif conversa.etapa == "qualificacao" and (
+        conversa.qualificacao or _entradas(sessao, conversa.id) >= MAX_MENSAGENS_EM_QUALIFICACAO
+    ):
+        conversa.etapa = "recomendacao"
 
 
 def _gravar_saida(
@@ -93,79 +211,199 @@ def _gravar_saida(
     return saida
 
 
+def _degradar(
+    sessao: Session, conversa: Conversa, entrada: Mensagem, motivo: str, comeco: float
+) -> list[Evento]:
+    """A Aurora sai e um humano entra, com aviso honesto ao cliente.
+
+    Vale para o teto de custo e para o provedor fora do ar: nos dois casos a alternativa
+    seria responder sem consultar, que é exatamente o risco que o projeto existe para
+    eliminar. Degradar para humano é ruim; inventar preço encerra o projeto.
+    """
+    conversa.modo = "humano"
+    conversa.etapa = "humano"
+    saida = _gravar_saida(sessao, conversa, entrada, MENSAGEM_NO_TETO, da_ia=False)
+    registrar(
+        sessao, conversa.id, "evento", motivo, dados={}, duracao_ms=_ms(comeco)
+    )
+    eventos: list[Evento] = [("token", {"texto": p}) for p in _fatiar(MENSAGEM_NO_TETO)]
+    eventos.append(("mensagem_fim", {"mensagem_id": str(saida.id), "etapa": conversa.etapa}))
+    return eventos
+
+
+def _ms(desde: float) -> int:
+    return int((time.monotonic() - desde) * 1000)
+
+
 async def executar_turno(
     sessao: Session, conversa: Conversa, entrada: Mensagem
 ) -> AsyncIterator[Evento]:
     comeco = time.monotonic()
-    etapa_inicial = conversa.etapa
 
+    # S-08 §3 — o teto corta antes de qualquer tool e antes de qualquer token.
     if not pode_chamar_llm(sessao):
-        # S-08 §3 — o teto corta antes de qualquer tool e antes de qualquer token. A
-        # conversa vai para a fila humana com o aviso honesto; a Aurora não tenta e falha.
-        conversa.modo = "humano"
-        conversa.etapa = "humano"
-        saida = _gravar_saida(sessao, conversa, entrada, MENSAGEM_NO_TETO, da_ia=False)
-        registrar(
-            sessao,
-            conversa.id,
-            "evento",
-            "teto_atingido",
-            dados={"etapa": etapa_inicial},
-            duracao_ms=_ms(comeco),
-        )
-        for pedaco in _fatiar(MENSAGEM_NO_TETO):
-            yield "token", {"texto": pedaco}
-        yield "mensagem_fim", {"mensagem_id": str(saida.id), "etapa": conversa.etapa}
+        for evento in _degradar(sessao, conversa, entrada, "teto_atingido", comeco):
+            yield evento
         return
 
-    permitidos: set[object] = set()
-    tools = tools_da_etapa(conversa.etapa)
+    if not PROVEDOR.configurado():
+        logger.error("EVSALES_MODELO ou EVSALES_OPENROUTER_API_KEY ausentes: turno degradado")
+        for evento in _degradar(sessao, conversa, entrada, "provedor_nao_configurado", comeco):
+            yield evento
+        return
 
-    if "buscar_unidades" in tools:
-        yield "tool_inicio", {"nome": "buscar_unidades"}
-        inicio_da_tool = time.monotonic()
-        unidades = buscar_unidades(sessao)
-        for unidade in unidades:
-            permitidos.add(unidade["preco_centavos"])
-            permitidos.add(unidade["autonomia_km"])
-        # O span guarda o retorno inteiro, não um resumo: é ele que prova de onde veio
-        # cada número da resposta, e resumo não prova nada (ADR-006).
-        registrar(
-            sessao,
-            conversa.id,
-            "tool",
-            "buscar_unidades",
-            dados={"argumentos": {}, "retorno": unidades},
-            duracao_ms=_ms(inicio_da_tool),
+    _etapa_antes_do_turno(sessao, conversa, entrada)
+    etapa_do_turno = conversa.etapa
+
+    mensagens: list[dict[str, object]] = [
+        {"role": "system", "content": _sistema(sessao, conversa)},
+        *_historico(sessao, conversa),
+        {"role": "user", "content": _do_cliente(entrada.conteudo)},
+    ]
+    fichas: list[dict[str, object]] = []
+    custo = 0
+    chamadas = 0
+    texto = ""
+
+    while True:
+        # S-03 §6 — no teto de tool calls o turno para de oferecer tools em vez de
+        # descartar a chamada seguinte: sem tool na mesa, o modelo escreve a resposta com
+        # o que já consultou, que é o que "encerra o turno com o que tem" quer dizer.
+        oferecidas = esquemas(conversa.etapa) if chamadas < MAX_TOOL_CALLS else []
+        try:
+            resposta = await PROVEDOR.conversar(mensagens, oferecidas)
+        except ProvedorIndisponivel:
+            for evento in _degradar(sessao, conversa, entrada, "provedor_indisponivel", comeco):
+                yield evento
+            return
+
+        custo += resposta.custo_micro_reais
+        if not resposta.tools or not oferecidas:
+            texto = resposta.texto
+            break
+
+        mensagens.append(
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": c.id,
+                        "type": "function",
+                        "function": {"name": c.nome, "arguments": json.dumps(c.argumentos)},
+                    }
+                    for c in resposta.tools
+                ],
+            }
         )
-        yield "tool_fim", {"nome": "buscar_unidades", "resumo": f"{len(unidades)} unidades"}
+        for chamada in resposta.tools:
+            chamadas += 1
+            yield "tool_inicio", {"nome": chamada.nome}
+            inicio_da_tool = time.monotonic()
+            try:
+                resultado: object = executar(sessao, conversa, chamada.nome, chamada.argumentos)
+            except (PermissionError, ValueError, KeyError) as erro:
+                # Nome inventado, etapa errada ou argumento inválido não derrubam o turno:
+                # o modelo recebe a recusa como retorno e segue sem aquele número.
+                resultado = {"erro": type(erro).__name__}
+            fichas.extend(_fichas_do(resultado))
+            # O span guarda argumentos e retorno inteiros, não um resumo: é ele que prova
+            # de onde veio cada número da resposta, e resumo não prova nada (ADR-006).
+            registrar(
+                sessao,
+                conversa.id,
+                "tool",
+                chamada.nome,
+                dados={"argumentos": chamada.argumentos, "retorno": resultado},
+                duracao_ms=_ms(inicio_da_tool),
+            )
+            mensagens.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": chamada.id,
+                    "content": json.dumps(resultado, ensure_ascii=False, default=str),
+                }
+            )
+            yield "tool_fim", {"nome": chamada.nome, "resumo": _resumo(chamada.nome, resultado)}
 
-    texto = RESPOSTA_PROVISORIA
-    aprovado = verificar_numeros(texto, permitidos)
+    if not texto.strip():
+        # S-03 §6 — estourou o teto de tool calls, ou o modelo devolveu só chamada e
+        # nenhuma prosa. Uma última passada sem tools encerra o turno com o que tem,
+        # em vez de entregar mensagem em branco ao cliente.
+        try:
+            resposta = await PROVEDOR.conversar(mensagens, [])
+        except ProvedorIndisponivel:
+            for evento in _degradar(sessao, conversa, entrada, "provedor_indisponivel", comeco):
+                yield evento
+            return
+        custo += resposta.custo_micro_reais
+        texto = resposta.texto
+
+    if not texto.strip():
+        for evento in _degradar(sessao, conversa, entrada, "resposta_vazia", comeco):
+            yield evento
+        return
+
+    permitidos = permitidos_de(fichas)
+    veredito = verificar_numeros(texto, permitidos, entrada.conteudo)
+    tentativas = 0
+
+    while not veredito.aprovado and tentativas < MAX_REGENERACOES:
+        tentativas += 1
+        mensagens.append({"role": "assistant", "content": texto})
+        mensagens.append(
+            {
+                "role": "user",
+                "content": (
+                    "Sua resposta citou números que não vieram de consulta nenhuma: "
+                    f"{', '.join(veredito.divergentes)}. Reescreva usando apenas os valores "
+                    "que as tools devolveram neste turno, ou sem citar número nenhum."
+                ),
+            }
+        )
+        try:
+            resposta = await PROVEDOR.conversar(mensagens, [])
+        except ProvedorIndisponivel:
+            for evento in _degradar(sessao, conversa, entrada, "provedor_indisponivel", comeco):
+                yield evento
+            return
+        custo += resposta.custo_micro_reais
+        texto = resposta.texto
+        veredito = verificar_numeros(texto, permitidos, entrada.conteudo)
+
     registrar(
         sessao,
         conversa.id,
         "verificacao",
         "numeros",
         dados={
-            "permitidos": sorted(str(p) for p in permitidos),
-            "veredito": "aprovado" if aprovado else "reprovado",
+            "extraidos": veredito.extraidos,
+            "divergentes": veredito.divergentes,
+            "permitidos": sorted(f"{u}:{v}" for u, v in permitidos),
+            "veredito": "aprovado" if veredito.aprovado else "reprovado",
+            "regeneracoes": tentativas,
         },
     )
 
-    if not aprovado:
+    if not veredito.aprovado:
         # S-03 §4 passo 3: bloqueia e transfere. O texto reprovado não é gravado, não é
         # fatiado e não aparece no evento de erro — nem parcialmente.
         conversa.modo = "humano"
         conversa.etapa = "humano"
         entrada.processada_em = agora()
         sessao.commit()
-        registrar_incidente(sessao, conversa.id, "numero_divergente", {"etapa": etapa_inicial})
+        registrar_incidente(
+            sessao,
+            conversa.id,
+            "numero_divergente",
+            {"etapa": etapa_do_turno, "divergentes": veredito.divergentes},
+        )
         yield "erro", {"codigo": "numero_divergente", "mensagem_ao_cliente": PEDIDO_DESCULPA}
         return
 
     saida = _gravar_saida(sessao, conversa, entrada, texto, da_ia=True)
-    conversa.etapa = _proxima_etapa(conversa.etapa)
+    if conversa.modo == "aurora":
+        # `transferir_para_humano` já mudou a etapa; a transição normal não desfaz isso.
+        _etapa_depois_do_turno(sessao, conversa)
     sessao.commit()
 
     registrar(
@@ -173,12 +411,15 @@ async def executar_turno(
         conversa.id,
         "turno",
         "aurora",
-        dados={"etapa": etapa_inicial, "tools": list(tools), "versao_do_prompt": None},
+        dados={
+            "etapa": etapa_do_turno,
+            "modelo": resposta.modelo,
+            "versao_do_prompt": VERSAO_DO_PROMPT,
+            "tools": list(disponiveis(etapa_do_turno)),
+            "tool_calls": chamadas,
+        },
         duracao_ms=_ms(comeco),
-        # ponytail: zero até a S-03 — o custo é o `usage` que o provedor devolve, e não
-        # há chamada ainda. Estimar por tokenizer local seria inventar o número que o
-        # Raí paga, que é exatamente o que o ADR-006 recusa.
-        custo_micro_reais=0,
+        custo_micro_reais=custo,
     )
     marcar_se_conversa_cara(sessao, conversa.id)
 

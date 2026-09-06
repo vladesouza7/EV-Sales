@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.conversas import router as rotas_de_conversa
 from app.db import obter_sessao
 from app.ia.tools.estoque import buscar_unidades
+from app.ia.turno import PROVEDOR
 from app.leads import LeadEntrada, abrir_conversa, gravar_cookie
 from app.testdrive import router as rotas_de_test_drive
 
@@ -64,18 +65,26 @@ def saude() -> dict[str, str]:
 def saude_das_dependencias(sessao: BancoDeDados, resposta: Response) -> dict[str, str]:
     """S-08 §7 — readiness. Só o que existe hoje é conferido.
 
-    ponytail: Redis, OpenRouter e a instância da Evolution entram aqui quando entrarem
-    no projeto (S-03, S-06). Um item fixo em "não configurado" seria checagem que nunca
-    falha, e checagem que nunca falha é ruído.
+    O provedor aparece como `configurado`, e não como `ok`: daqui só dá para afirmar que
+    a chave e o modelo estão no ambiente. Dizer "ok" seria afirmar que o OpenRouter
+    responde, o que exigiria gastar uma chamada de verdade a cada readiness.
+
+    ponytail: Redis e a instância da Evolution entram quando entrarem no projeto (S-06).
+
+    Só o Postgres derruba o readiness: sem provedor a Aurora degrada para atendimento
+    humano, que é operação reduzida e não indisponibilidade.
     """
+    estado = {
+        "openrouter": "configurado" if PROVEDOR.configurado() else "nao_configurado",
+    }
     try:
         sessao.execute(text("SELECT 1"))
     except Exception:
         # Sem `str(erro)`: a URL do banco carrega a senha, e o corpo de erro é uma das
         # quatro superfícies que a invariante 5 nomeia.
         resposta.status_code = 503
-        return {"postgres": "indisponivel"}
-    return {"postgres": "ok"}
+        return {**estado, "postgres": "indisponivel"}
+    return {**estado, "postgres": "ok"}
 
 
 @app.get("/", include_in_schema=False)

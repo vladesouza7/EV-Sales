@@ -51,15 +51,9 @@
       style: "currency", currency: "BRL", maximumFractionDigits: 0
     });
 
-    // O banco guarda o token; a tela mostra o nome. O rótulo nunca some — é ele que
-    // impede o cliente de ler 533 (WLTP) e 481 (Inmetro) como se fossem comparáveis.
-    var FONTES = { INMETRO_PBEV_2026: "Inmetro", WLTP: "WLTP", FABRICANTE: "fabricante" };
-
-    function autonomia(carro) {
-      // ADR-003: sem fonte confirmada não se estima, e a fonte nunca fica implícita.
-      if (carro.autonomia_km === null) return "autonomia: vou confirmar com a loja";
-      return carro.autonomia_km + " km — " + (FONTES[carro.autonomia_fonte] || carro.autonomia_fonte);
-    }
+    // O rótulo da autonomia vem pronto do servidor, na mesma frase que a Aurora usa
+    // (S-03 §1). Montá-lo aqui de novo seria uma segunda redação do mesmo aviso, e é a
+    // segunda redação que envelhece sozinha e passa a divergir da primeira.
 
     function versao(carro) {
       var partes = [carro.versao, carro.ano, carro.cor, carro.condicao];
@@ -81,7 +75,7 @@
       corpo.className = "corpo";
       corpo.appendChild(linha("h2", "", carro.marca + " " + carro.modelo));
       corpo.appendChild(linha("span", "detalhe", versao(carro)));
-      corpo.appendChild(linha("span", "detalhe", autonomia(carro)));
+      corpo.appendChild(linha("span", "detalhe", carro.autonomia_texto));
       corpo.appendChild(linha("span", "preco", real.format(carro.preco_centavos / 100)));
 
       var conversar = document.createElement("a");

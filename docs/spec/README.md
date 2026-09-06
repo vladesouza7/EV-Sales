@@ -36,7 +36,7 @@ Estado em **6 de setembro de 2026**. "Parcial" sempre diz o que falta, no cabeç
 |---|---|---|---|---|
 | [S-01](S-01-landing-e-captura-de-lead.md) | Landing e captura de lead | Página, formulário, catálogo somente-leitura | ✔ pronta | |
 | [S-02](S-02-chat-web-e-sessao.md) | Chat web e sessão | Streaming, modelo de conversa, etapas | ✔ pronta | |
-| [S-03](S-03-agente-aurora.md) | A Aurora | Tools, qualificação, **verificação numérica** | ✗ não começada | ✅ preço · ✅ autonomia · ✅ injection |
+| [S-03](S-03-agente-aurora.md) | A Aurora | Tools, qualificação, **verificação numérica** | ◐ parcial — agente, tools e verificação sim; evals e 2 tools não | ✅ preço · ✅ autonomia · ✅ injection |
 | [S-04](S-04-fila-de-aprovacao.md) | Fila de aprovação | A pausa, a tela da Neuza, o Espelho de Condição | ✗ não começada | |
 | [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ✗ não começada | ✅ concorrência |
 | [S-06](S-06-handoff-whatsapp.md) | Handoff WhatsApp | Token, webhook, continuidade | ✗ não começada | |

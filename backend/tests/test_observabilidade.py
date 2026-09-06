@@ -24,6 +24,7 @@ from app.observabilidade import (
     registrar,
 )
 
+from .dubles import ProvedorDuble
 from .test_conversas import LEAD, SEAL, _turno
 
 MICRO = 10_000  # um centavo
@@ -48,8 +49,10 @@ def _gastar(sessao: Session, micro_reais: int, *, quando: object = None) -> None
 
 
 def test_cada_tool_do_turno_vira_span_com_argumentos_e_retorno(
-    cliente: TestClient, sessao: Session, conversa_id: uuid.UUID
+    cliente: TestClient, sessao: Session, conversa_id: uuid.UUID, provedor: ProvedorDuble
 ) -> None:
+    provedor.chamar_tool("buscar_unidades", preco_max_centavos=30000000)
+    provedor.responder("Tenho um Seal branco aqui, quer ver?")
     sessao.add(Unidade(**SEAL))
     conversa = sessao.get(Conversa, conversa_id)
     assert conversa is not None
@@ -181,3 +184,5 @@ def test_saude_responde_com_o_estado_das_dependencias(cliente: TestClient) -> No
     pronto = cliente.get("/health/ready")
     assert pronto.status_code == 200
     assert pronto.json()["postgres"] == "ok"
+    # Sem chave no ambiente de teste: o readiness diz isso em vez de fingir que está de pé.
+    assert pronto.json()["openrouter"] == "nao_configurado"

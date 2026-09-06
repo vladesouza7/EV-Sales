@@ -1,7 +1,32 @@
 # S-03 — A Aurora: tools, qualificação e verificação numérica
 
-**Depende de:** [S-02](S-02-chat-web-e-sessao.md)
+**Depende de:** [S-02](S-02-chat-web-e-sessao.md), [S-08](S-08-observabilidade-e-custo.md)
 **Decide por:** [ADR-003](../adr/ADR-003-numeros-nunca-saem-do-modelo.md), [ADR-008](../adr/ADR-008-openrouter-como-provedor.md), [ADR-009](../adr/ADR-009-sem-framework-de-orquestracao.md)
+**Estado:** parcial.
+
+| § | O que diz | Onde está |
+|---|---|---|
+| §1 | Estoque e a regra de autonomia | `app/ia/tools/estoque.py` — a frase da fonte é montada na tool |
+| §2 | Tools | 5 das 11: `buscar_unidades`, `detalhar_unidade`, `comparar_unidades`, `registrar_qualificacao`, `transferir_para_humano` |
+| §3 | Qualificação adaptativa | `app/ia/turno.py` — o salto da Persona 3 é regra de código, não de prompt |
+| §4 | **Verificação numérica** | `app/ia/verificacao.py`, com regeneração única e handoff |
+| §5 | Prompt | `app/ia/prompts/aurora_v1.md`, versão gravada no span do turno |
+| §6 | Limites do loop | `app/ia/turno.py` |
+| §7 | Prompt injection | mensagem do cliente rotulada e delimitada |
+| §8 | **Eval** | **não existe** — precisa da chave do provedor e das 48 conversas gravadas |
+
+**O que falta, e por quê:**
+
+- `buscar_conhecimento` — depende de pgvector e do conteúdo curado de objeções, que ainda
+  não foi escrito ([ADR-002](../adr/ADR-002-pgvector-em-vez-de-qdrant.md)).
+- `calcular_custo_km` — precisa de `bateria_kwh`, coluna que não existe. Criá-la é migration
+  em `unidades`, que o [CLAUDE.md](../../CLAUDE.md) manda passar por revisão humana.
+- `solicitar_aprovacao` ([S-04](S-04-fila-de-aprovacao.md)), `reservar_chassi`
+  ([S-05](S-05-reserva-de-chassi.md)) e as tools de agenda da [S-07](S-07-test-drive.md) já
+  estão no mapa de etapas; o registro de tools só oferece ao modelo o que existe implementado.
+- **Os três portões de CI desta spec continuam não existindo.** O eval roda contra o provedor
+  de verdade, e o que o `pytest` cobre hoje é o que o código garante — a ordem do turno, a
+  verificação e o filtro de tools —, não a qualidade da resposta do modelo.
 
 ---
 

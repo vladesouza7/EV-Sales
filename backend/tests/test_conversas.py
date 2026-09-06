@@ -18,7 +18,10 @@ from app.db import agora
 from app.ia import turno as modulo_turno
 from app.ia.etapas import tools_da_etapa
 from app.ia.turno import Evento, executar_turno
+from app.ia.verificacao import Veredito
 from app.modelos import Conversa, Mensagem, Unidade
+
+from .dubles import TEXTO_PADRAO, ProvedorDuble
 
 LEAD = {"nome": "Jaqueline", "telefone": "(83) 98871-4471", "origem": "landing"}
 
@@ -150,8 +153,10 @@ def test_resposta_chega_em_streaming(
 
 
 def test_consulta_ao_estoque_fica_visivel(
-    cliente: TestClient, sessao: Session, conversa_id: uuid.UUID
+    cliente: TestClient, sessao: Session, conversa_id: uuid.UUID, provedor: ProvedorDuble
 ) -> None:
+    provedor.chamar_tool("buscar_unidades")
+    provedor.responder("Tenho um Seal branco aqui na loja, quer ver?")
     sessao.add(Unidade(**SEAL))
     conversa = sessao.get(Conversa, conversa_id)
     assert conversa is not None
@@ -178,7 +183,10 @@ def test_texto_reprovado_nao_chega_ao_cliente(
     conversa_id: uuid.UUID,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(modulo_turno, "verificar_numeros", lambda texto, permitidos: False)
+    reprovado = Veredito(aprovado=False, extraidos=["R$ 1.000"], divergentes=["R$ 1.000"])
+    monkeypatch.setattr(
+        modulo_turno, "verificar_numeros", lambda texto, permitidos, do_cliente: reprovado
+    )
 
     cliente.post(f"/api/conversas/{conversa_id}/mensagens", json={"conteudo": "qual o preço?"})
     eventos = _turno(sessao, conversa_id)
@@ -186,7 +194,7 @@ def test_texto_reprovado_nao_chega_ao_cliente(
     assert "token" not in _nomes(eventos)
     assert _nomes(eventos) == ["erro"]
     assert eventos[0][1]["codigo"] == "numero_divergente"
-    assert modulo_turno.RESPOSTA_PROVISORIA not in json.dumps(eventos[0][1])
+    assert TEXTO_PADRAO not in json.dumps(eventos[0][1])
 
     sessao.expire_all()
     assert _saidas(sessao, conversa_id) == []

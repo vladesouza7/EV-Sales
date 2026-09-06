@@ -15,8 +15,11 @@ from sqlalchemy import text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db import Base, engine  # noqa: E402
+from app.ia import turno as modulo_turno  # noqa: E402
 from app.limite import limpar_limites  # noqa: E402
 from app.main import app  # noqa: E402
+
+from .dubles import ProvedorDuble  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -50,3 +53,12 @@ def sessao() -> Iterator[Session]:
 def cliente() -> Iterator[TestClient]:
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def provedor(monkeypatch: pytest.MonkeyPatch) -> ProvedorDuble:
+    """Nenhum teste fala com o OpenRouter. Autouse porque um teste que esquecesse de
+    trocar o provedor tentaria a rede de verdade — e falharia por motivo errado."""
+    duble = ProvedorDuble()
+    monkeypatch.setattr(modulo_turno, "PROVEDOR", duble)
+    return duble

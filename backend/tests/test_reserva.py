@@ -19,6 +19,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.aprovacao import _numero_do_espelho
 from app.core.pii import cifrar, hash_telefone
 from app.db import URL, agora, engine
 from app.ia.etapas import tools_da_etapa
@@ -78,7 +79,10 @@ def _cenario(sessao: Session, chassi: str = str(SEAL["chassi"])) -> tuple[Conver
             chassi=chassi,
             approval_id=pedido.id,
             preco_centavos=24999000,
-            numero=f"SV-2026-{uuid.uuid4().int % 10000:04d}",
+            # A mesma sequência do Postgres que a S-04 usa. Um número sorteado em 4
+            # dígitos colide em ~12% das corridas de 50 — e portão intermitente vira
+            # "roda de novo", que é como um portão deixa de ser portão.
+            numero=_numero_do_espelho(sessao),
             pdf_objeto="documentos/x.pdf",
             valido_ate=agora_ + timedelta(days=7),
             emitido_em=agora_,

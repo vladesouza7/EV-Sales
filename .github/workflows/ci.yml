@@ -1,0 +1,60 @@
+# S-10 §7 — o que bloqueia merge. Sem este arquivo os portões rodavam na máquina de quem
+# escreveu o código, que é o mesmo que não rodar (docs/spec/README.md).
+#
+# Os serviços são os do próprio `docker-compose.yml`: definir postgres e minio outra vez
+# aqui criaria uma segunda verdade, e é a segunda que envelhece.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  portoes:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          # Sem pin de versão: o uv resolve pelo `requires-python` do pyproject, igual à
+          # máquina de quem desenvolve. Pin aqui seria testar um interpretador que ninguém usa.
+          enable-cache: true
+
+      - name: Postgres e MinIO
+        working-directory: .
+        run: |
+          cp .env.example .env
+          docker compose up -d postgres minio
+          timeout 120 bash -c 'until docker compose exec -T postgres pg_isready -U evsales; do sleep 1; done'
+          timeout 120 bash -c 'until curl -sf localhost:9000/minio/health/live; do sleep 1; done'
+
+      - run: uv run ruff check .
+
+      # Só `app`: a suíte ainda não passa no strict, e ligar isso aqui seria trocar o
+      # portão por 16 erros pré-existentes. Está no ledger, não subentendido.
+      # ponytail: `mypy tests` quando os 16 erros de tipo da suíte forem limpos.
+      - run: uv run mypy app
+
+      - name: Migrations sobem e descem
+        run: uv run alembic upgrade head && uv run alembic downgrade base && uv run alembic upgrade head
+
+      # Os portões primeiro: se um deles cai, é a primeira linha vermelha do relatório.
+      - name: "Portão — concorrência de reserva (S-05)"
+        run: uv run pytest -q tests/test_reserva.py::test_cinquenta_simultaneas_exatamente_uma_vence
+
+      - name: "Portão — varredura de PII nos logs (S-09 §7)"
+        run: uv run pytest -q tests/test_varredura_pii.py
+
+      # ponytail: faltam os três portões de eval da S-03 §8 (preço e estoque, autonomia e
+      # fonte, injection) e a cobertura ≥70% no core. Entram aqui quando as suítes
+      # existirem — enquanto isso, o estado está escrito em docs/spec/README.md, não
+      # subentendido num passo comentado.
+      - run: uv run pytest -q

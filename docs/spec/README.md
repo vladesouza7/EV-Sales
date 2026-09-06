@@ -48,23 +48,26 @@ delegada a quem implementa, e autenticação não é decisão para delegar.
 | [S-06](S-06-handoff-whatsapp.md) | Handoff WhatsApp | Token, webhook, continuidade | ✗ não começada | |
 | [S-07](S-07-test-drive.md) | Test drive | Agenda real, dossiê do vendedor, **desfecho** | ◐ parcial — agenda sim; §6, §8 e §9 não | |
 | [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo, teto e as duas telas sim; Langfuse não | |
-| [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem e máscara sim; retenção não | ✅ varredura de logs |
-| [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose e seed sim; backup, runbook e CI não | |
+| [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem, máscara e a varredura sim; retenção não | ✅ varredura de logs — **existe** |
+| [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose, seed e o CI sim; backup e runbook não | |
 | [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ◐ parcial — login, sessão e perfis sim; as telas são da S-04 e da S-08 | |
 
 Os cinco ✅ são os portões que **reprovam o build**. Eles existem porque risco sem verificação
 automatizada é desejo, não requisito: enquanto o eval não bloqueia o merge, o ADR envelhece em
 silêncio dizendo que está tudo mitigado.
 
-**Um dos cinco existe hoje**: o teste de concorrência da [S-05](S-05-reserva-de-chassi.md), que
-foi verificado contra uma versão deliberadamente quebrada da operação antes de ser aceito — portão
-que não reprova o código errado é decoração.
+**Dois dos cinco existem hoje**, e os dois foram aceitos do mesmo jeito — rodando contra um erro
+de propósito, porque portão que não reprova o código errado é decoração:
 
-Os outros quatro ainda não existem, e é bom que isso esteja escrito em vez de subentendido: três
-dependem dos evals da [S-03](S-03-agente-aurora.md), e a varredura de PII existe como teste pontual
-por endpoint ([S-09](S-09-protecao-de-pii.md)), não como varredura. O CI que executa os cinco é
-entrega da [S-10](S-10-operacao.md) e ainda não foi escrito — enquanto ele não existir, **nenhum
-deles bloqueia merge de verdade**.
+- o teste de concorrência da [S-05](S-05-reserva-de-chassi.md), verificado contra uma versão
+  deliberadamente quebrada da operação;
+- a varredura de PII da [S-09 §7](S-09-protecao-de-pii.md), que roda um atendimento com telefone e
+  sobrenome sintéticos e procura os dois no log e na trilha — e cujo primeiro teste é um vazamento
+  proposital, para provar que ela pega.
+
+Os outros três dependem dos evals da [S-03](S-03-agente-aurora.md). O CI que executa os portões é
+entrega da [S-10 §7](S-10-operacao.md) e está em `.github/workflows/ci.yml`: `main` protegida, PR
+obrigatório, e um portão vermelho bloqueia o merge de verdade.
 
 ## Como uma spec vira código neste repositório
 

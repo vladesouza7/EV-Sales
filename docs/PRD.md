@@ -85,6 +85,27 @@ O cliente cadastra nome e telefone na landing, conversa com a Aurora no site, e 
 ([ADR-005](adr/ADR-005-handoff-whatsapp-por-wa-me.md)). A mesma Aurora continua pelo WhatsApp, com
 o histórico preservado, até o test drive agendado.
 
+### As portas que não passam pela Aurora
+
+Essa é a jornada principal, e não é a única. A landing tem três portas laterais, todas fora do chat:
+
+| Porta | Vai para | O que o cliente faz |
+|---|---|---|
+| **Conheça os modelos** | `/catalogo` | Vê o estoque, sem chat e sem cadastro — a saída pelo lado do [ADR-010 §2](adr/ADR-010-cadastro-antes-do-chat.md) |
+| **Conheça as ofertas** | `/ofertas` | O mesmo estoque, do menor para o maior preço. **Não é promoção**: desconto não existe no sistema |
+| **Confira com um test-drive** | `/test-drive` | Marca direto contra a agenda real, deixando nome e telefone ([S-07](spec/S-07-test-drive.md)) |
+
+A terceira é a que tem consequência de produto, e vale dizê-la em voz alta: **um test drive marcado
+por essa porta chega ao vendedor sem qualificação nenhuma**. Não passou pela Aurora, então
+`conversas.qualificacao` está vazia e o dossiê da [S-07 §8](spec/S-07-test-drive.md) nasce sem
+conteúdo. O Dr. Almir — que já decidiu e para quem qualificar é atrito — é exatamente quem vai usar
+essa porta, e para ele isso é uma vantagem. Para o Tarcísio da persona 1, não: ele marca um test
+drive de um carro que talvez não sirva para a rotina dele.
+
+A métrica §6.1 de *conversas que chegam à Neuza já qualificadas* precisa, por isso, ser lida
+separando as duas origens (`leads.origem = 'test_drive'` contra as demais). Média das duas
+juntas esconde justamente o que interessa.
+
 **A jornada digital termina aí** ([ADR-011](adr/ADR-011-jornada-digital-termina-no-test-drive.md)).
 O Espelho de Condição e Reserva **não é contrato nem documento fiscal**: é o equivalente digital do
 *"segurei esse carro pra você até sexta"* que a Neuza faz hoje no balcão. A venda — negociação
@@ -103,6 +124,7 @@ catálogo passaria a mentir, o que destruiria a premissa do
 | # | Entrega | Spec |
 |---|---|---|
 | 1 | Landing da Sol & Volt com cadastro de nome + telefone e validação de celular BR | [S-01](spec/S-01-landing-e-captura-de-lead.md) |
+| 1b | Catálogo somente-leitura e vitrine `/ofertas` (mesmo estoque, do menor preço para o maior) | [S-01](spec/S-01-landing-e-captura-de-lead.md) |
 | 2 | Chat web com a Aurora (streaming), sessão amarrada ao lead | [S-02](spec/S-02-chat-web-e-sessao.md) |
 | 3 | Agente Aurora: qualificação adaptativa, recomendação e quebra de objeção | [S-03](spec/S-03-agente-aurora.md) |
 | 4 | Catálogo e estoque por chassi no Postgres, exposto ao agente **só por tool** | [S-03](spec/S-03-agente-aurora.md) |
@@ -112,6 +134,7 @@ catálogo passaria a mentir, o que destruiria a premissa do
 | 8 | Agendamento de test drive contra a agenda real dos vendedores | [S-07](spec/S-07-test-drive.md) |
 | 8b | **Dossiê do atendimento** para o vendedor abrir antes do test drive | [S-07](spec/S-07-test-drive.md) |
 | 8c | **Registro de desfecho** pós-test-drive, num toque | [S-07](spec/S-07-test-drive.md) |
+| 8d | Página pública de test drive, para quem já decidiu e não quer conversar | [S-07](spec/S-07-test-drive.md) |
 | 9 | Trace por conversa, custo por conversa e teto mensal de gasto | [S-08](spec/S-08-observabilidade-e-custo.md) |
 | 10 | PII cifrada em repouso e mascarada em todo log e trace | [S-09](spec/S-09-protecao-de-pii.md) |
 | 11 | `docker compose up` sobe tudo, com seed do catálogo | [S-10](spec/S-10-operacao.md) |

@@ -2,6 +2,34 @@
 
 **Depende de:** [S-05](S-05-reserva-de-chassi.md)
 **Decide por:** [ADR-001](../adr/ADR-001-postgres-fonte-da-verdade.md)
+**Estado:** ◐ parcial — ver o quadro abaixo
+
+---
+
+## O que já está implementado
+
+Esta spec foi implementada **em parte e fora de ordem** (ver
+[README das specs](README.md#ordem-de-implementação)), para que a landing tivesse uma porta direta
+de test drive antes da Aurora existir.
+
+| § | O quê | Estado |
+|---|---|---|
+| §1 | `vendedores`, `agenda_bloqueios`, `test_drives` e os dois `EXCLUDE` | ✔ |
+| §2 | Janela de atendimento, duração, intervalo, almoço, antecedências | ✔ |
+| §3 | Oferta de no máximo 3 horários reais | ✔ pela página `/test-drive`; **não** como tool da Aurora |
+| §4 | Gravação, atribuição de vendedor, conversa em `encerrada` com desfecho | ✔ exceto a notificação ao vendedor (§4.3), que depende da [S-06](S-06-handoff-whatsapp.md) |
+| §5 | Confirmação para o cliente | ✔ na tela; ainda não pelo WhatsApp |
+| §6 | Lembrete de 24h | ✗ depende da [S-06](S-06-handoff-whatsapp.md) |
+| §7 | Remarcação e cancelamento | ✗ |
+| §8 | Dossiê do atendimento | ✗ depende de `conversas.qualificacao`, que a [S-03](S-03-agente-aurora.md) preenche |
+| §9 | Registro de desfecho | ✗ depende da tela autenticada da [S-04](S-04-fila-de-aprovacao.md) |
+
+Duas consequências de ter vindo antes da S-05, e as duas são deliberadas:
+
+1. A condição §3.4 — *"o chassi está `reservado` para este lead ou `disponivel`"* — está no código
+   e o ramo do `reservado` fica **inerte** até existir reserva. Nenhum carro está reservado hoje.
+2. Sem o §9, **nada marca unidade como vendida** — que é exatamente o que a §9 manda de qualquer
+   forma: o sistema nunca infere venda. O que falta é o toque do vendedor, não a trava.
 
 ---
 

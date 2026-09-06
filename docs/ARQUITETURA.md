@@ -15,13 +15,13 @@ espera uma pessoa**. Tudo o mais é consequência disso.
                         ┌────────────┴────────────┐
                         │                         │
                         ▼                         ▼
-                 ┌─────────────┐          ┌──────────────┐
-                 │  React+Vite │          │ Evolution API│
-                 │  landing    │          │   WhatsApp   │
-                 │  chat       │          └──────┬───────┘
-                 │  fila Neuza │                 │ webhook
-                 │  ler atend. │                 │
-                 └──────┬──────┘                 │
+                 ┌──────────────┐         ┌──────────────┐
+                 │ web estático │         │ Evolution API│
+                 │  landing     │         │   WhatsApp   │
+                 │  chat        │         └──────┬───────┘
+                 │  fila Neuza  │                │ webhook
+                 │  ler atend.  │                │
+                 └──────┬───────┘                │
                         │ REST + SSE             │
                         └───────────┬────────────┘
                                     ▼
@@ -163,6 +163,32 @@ o EV-Sales só precisa saber se aquele chassi foi vendido, para o catálogo não
 
 O padrão: **degradar para humano, nunca para adivinhação.** Em todos os casos, o pior resultado
 aceitável é o cliente esperar por uma pessoa. Não é aceitável o cliente receber um número inventado.
+
+## Onde o código está hoje
+
+O desenho acima é o **alvo**. Em 6 de setembro de 2026, metade das caixas ainda não foi construída,
+e um desenho que não diz isso vira ficção com aparência de documentação.
+
+| Caixa no desenho | Estado no código | Onde entra |
+|---|---|---|
+| React + Vite | **Não é isso.** O frontend é HTML, CSS e JS sem build, servido pelo próprio FastAPI em `/static` | ver abaixo |
+| FastAPI "só enfileira" | A API **processa o turno na própria requisição**, no gerador do SSE | [S-02 §3](spec/S-02-chat-web-e-sessao.md) |
+| Redis (fila · lock · contador) | Não existe. A fila de turnos é a coluna `mensagens.processada_em`; a trava por conversa e o limite por minuto são em memória do processo; o contador de custo não existe | [S-08](spec/S-08-observabilidade-e-custo.md) |
+| Worker com o loop de tool calling | Não existe | [S-03](spec/S-03-agente-aurora.md) |
+| OpenRouter | Não existe. O turno responde com texto fixo, sem número nenhum | [S-03](spec/S-03-agente-aurora.md) |
+| Langfuse | Não existe | [S-08](spec/S-08-observabilidade-e-custo.md) |
+| Evolution API | Não existe | [S-06](spec/S-06-handoff-whatsapp.md) |
+| Postgres | ✔ é o que existe de mais completo: leads, conversas, mensagens, unidades, vendedores, agenda e test drives | |
+
+O que **já vale** do desenho, e não é pouco: o estado da conversa é uma linha no Postgres e sobrevive
+a restart; as tools são filtradas por etapa e a lista de `aguardando_aprovacao` é vazia; a ordem
+"gera, verifica, só então grava" está montada, esperando o modelo; e o test drive é decidido por
+índice de exclusão no banco, não por conferência em Python.
+
+**A troca de React + Vite por HTML sem build ainda não tem ADR.** Foi decidida na prática, ao
+escrever a [S-01](spec/S-01-landing-e-captura-de-lead.md), e a justificativa é boa — cinco telas
+estáticas não pagam um pipeline de build, e a equipe da Sol & Volt consegue abrir o arquivo e ler.
+Mas decisão sem registro é decisão que ninguém pode contestar depois. Ela precisa de um ADR próprio.
 
 ## O que foi cortado do desenho original, e por quê
 

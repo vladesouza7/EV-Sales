@@ -23,13 +23,26 @@ conversas
   id, lead_id, etapa, canal_atual ('web' | 'whatsapp'),
   modo ('aurora' | 'humano'), atendente_id,
   qualificacao (jsonb), chassi_em_foco, trace_id,
-  criada_em, ultima_mensagem_em
+  token_sessao (único), token_expira_em,
+  desfecho, criada_em, ultima_mensagem_em
 
 mensagens
   id, conversa_id, direcao ('entrada' | 'saida'), autor ('cliente' | 'aurora' | 'vendedor'),
   canal ('web' | 'whatsapp'), conteudo, gerada_por_ia (bool),
-  whatsapp_message_id, payload_bruto (jsonb), criada_em
+  whatsapp_message_id, payload_bruto (jsonb), criada_em, processada_em
 ```
+
+Três colunas explicadas, porque não são óbvias no diagrama:
+
+| Coluna | Para quê |
+|---|---|
+| `conversas.token_sessao` / `token_expira_em` | O cookie da [S-01](S-01-landing-e-captura-de-lead.md) é a credencial: não há login, e o token vale por uma conversa e por 24h |
+| `conversas.desfecho` | O que a conversa virou. Hoje só o test drive preenche ([S-07 §4](S-07-test-drive.md)) |
+| `mensagens.processada_em` | A fila de turnos do §4 é esta coluna. Um `CHECK` impede o único estado sem sentido — resposta da Aurora esperando resposta da Aurora |
+
+> `leads.apagar_em` está no desenho e **ainda não existe na tabela**: a retenção de 90 dias é
+> entrega da [S-09](S-09-protecao-de-pii.md), que não foi implementada. Enquanto ela não vier,
+> nada apaga lead sozinho.
 
 **`canal` é coluna da mensagem, não da conversa.** Uma conversa migra de canal e mantém id,
 histórico e qualificação — é o que faz o handoff do [ADR-005](../adr/ADR-005-handoff-whatsapp-por-wa-me.md)

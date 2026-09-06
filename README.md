@@ -73,7 +73,7 @@ uma lista que não contém a função. Na etapa de espera pela Neuza, a lista es
 | LLM | OpenRouter atrás de interface própria | Custo real por conversa vem do faturamento; trocar de modelo é uma variável de ambiente |
 | WhatsApp | Evolution API, **só respondendo** | O cliente inicia por `wa.me`. Disparo ativo arrisca o número da vitrine |
 | Observabilidade | Langfuse self-hosted | Duas leituras da mesma origem: transcrição para o Raí, trace para mim |
-| API / Front | FastAPI + React/Vite | — |
+| API / Front | FastAPI, com o front em HTML/CSS/JS **sem build** | Cinco telas estáticas não pagam um pipeline de build, e a equipe da Sol & Volt abre o arquivo e lê. Decisão ainda sem ADR — ver [ARQUITETURA](docs/ARQUITETURA.md#onde-o-código-está-hoje) |
 
 Cinco containers. **Sem Qdrant, sem MinIO, sem Prometheus/Grafana/Loki** — cada ausência tem ADR.
 
@@ -134,6 +134,11 @@ mitigado.
 ---
 
 ## Documentação
+
+**Estado da implementação:** o quadro por spec fica em
+[docs/spec/README.md](docs/spec/README.md#as-specs). Em resumo: landing, catálogo, chat e a agenda
+de test drive estão de pé; a Aurora, a fila da Neuza, a reserva, o WhatsApp, o trace e os cinco
+portões de CI ainda não.
 
 | | |
 |---|---|

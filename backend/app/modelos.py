@@ -449,3 +449,63 @@ class Espelho(Base):
     pdf_objeto: Mapped[str] = mapped_column(String(120))
     valido_ate: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     emitido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+
+class Reserva(Base):
+    """S-05 — a operação que não pode falhar.
+
+    ARQUIVO DE REVISÃO HUMANA OBRIGATÓRIA na migration (CLAUDE.md).
+
+    > "Carro eu tenho um de cada. Se esse negócio prometer o mesmo Seal branco pra duas
+    > pessoas, alguém vai ter que ligar pra uma delas e desmarcar. E esse alguém sou eu."
+
+    Quem decide a corrida é o `UPDATE … WHERE status = 'disponivel'` em `unidades`, não
+    esta tabela. Os dois índices parciais abaixo são a segunda linha: mesmo que alguém
+    troque o UPDATE por um SELECT seguido de INSERT — o erro que já aconteceu neste
+    repositório —, o banco recusa a segunda reserva ativa.
+    """
+
+    __tablename__ = "reservas"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('ativa', 'liberada', 'concluida')", name="ck_reservas_status"
+        ),
+        # S-05 §4 — no máximo 2 renovações, de 72h cada.
+        CheckConstraint("renovacoes BETWEEN 0 AND 2", name="ck_reservas_renovacoes"),
+        CheckConstraint("expira_em > criada_em", name="ck_reservas_prazo_positivo"),
+        # Um chassi tem no máximo uma reserva ativa. Este índice é o que sobrevive a um
+        # refactor errado da operação em `app/reserva.py`.
+        Index(
+            "ux_reservas_uma_ativa_por_chassi",
+            "chassi",
+            unique=True,
+            postgresql_where=literal_column("status = 'ativa'"),
+        ),
+        # S-05 §2 — o lead não tem outra reserva ativa. Reservar dois carros é o começo
+        # de dois carros parados, e o Raí só tem um de cada.
+        Index(
+            "ux_reservas_uma_ativa_por_lead",
+            "lead_id",
+            unique=True,
+            postgresql_where=literal_column("status = 'ativa'"),
+        ),
+        Index("ix_reservas_status_expira", "status", "expira_em"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    chassi: Mapped[str] = mapped_column(ForeignKey("unidades.chassi"))
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id", ondelete="CASCADE"))
+    conversa_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversas.id", ondelete="CASCADE"))
+    # Invariante 3: reserva exige aprovação válida. As duas colunas são NOT NULL com FK.
+    approval_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pedidos_de_aprovacao.id", ondelete="RESTRICT"), nullable=False
+    )
+    espelho_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("espelhos.id", ondelete="RESTRICT"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(10), default="ativa")
+    renovacoes: Mapped[int] = mapped_column(Integer, default=0)
+    criada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    liberada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    motivo_liberacao: Mapped[str | None] = mapped_column(String(30), default=None)

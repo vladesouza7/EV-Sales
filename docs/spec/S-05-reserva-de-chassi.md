@@ -2,6 +2,22 @@
 
 **Depende de:** [S-04](S-04-fila-de-aprovacao.md)
 **Decide por:** [ADR-001](../adr/ADR-001-postgres-fonte-da-verdade.md)
+**Estado:** ◐ parcial — a operação, as pré-condições, a liberação e o **portão de concorrência**
+sim; a rotina periódica e o aviso ao vendedor não.
+
+| § | O quê | Estado |
+|---|---|---|
+| §1 | `UPDATE … WHERE status='disponivel'`, tudo numa transação | ✔ `app/reserva.py` |
+| §2 | As cinco pré-condições | ✔ e mais uma: o `approval_id` tem de ser **desta** conversa |
+| §3 | Quem perde volta para `recomendacao` sem o chassi | ✔ |
+| §4 | 72h, liberação, renovação (máx. 2) | ◐ `liberar_vencidas` existe; **quem a chama a cada 5 min é a [S-10](S-10-operacao.md)**, e o aviso ao vendedor é da [S-06](S-06-handoff-whatsapp.md) |
+| §5 | Concorrência entre canais | ✔ o lock da S-02 e o UPDATE são independentes, como a spec pede |
+| §6 | **Portão de CI: 50 simultâneas, 1 vencedor** | ✔ `tests/test_reserva.py` |
+
+**Uma pré-condição a mais do que a §2 lista**, e ela é de segurança: o `approval_id` chega pelo
+modelo, e o modelo lê texto do cliente. A tool confere que aquele pedido pertence **a esta
+conversa** — sem isso, um id de aprovação de outra conversa reservaria o carro para o cliente
+errado.
 
 ---
 

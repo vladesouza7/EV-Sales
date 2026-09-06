@@ -20,6 +20,7 @@ from app.ia.etapas import tools_da_etapa
 from app.ia.tools.estoque import buscar_unidades, comparar_unidades, detalhar_unidade
 from app.ia.tools.qualificacao import registrar_qualificacao, transferir_para_humano
 from app.modelos import Conversa
+from app.reserva import reservar_chassi
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,21 @@ REGISTRO: dict[str, Tool] = {
         parametros=_objeto({"chassi": {"type": "string"}}, ["chassi"]),
         executar=lambda sessao, conversa, args: solicitar_aprovacao(
             sessao, conversa, str(args["chassi"])
+        ),
+    ),
+    "reservar_chassi": Tool(
+        nome="reservar_chassi",
+        descricao=(
+            "Tira o carro do estoque para este cliente, por 72 horas. Exige o id da "
+            "aprovação da gerente. Se voltar 'indisponivel', outro cliente reservou "
+            "primeiro: avise com honestidade e ofereça outra unidade parecida."
+        ),
+        parametros=_objeto(
+            {"chassi": {"type": "string"}, "approval_id": {"type": "string"}},
+            ["chassi", "approval_id"],
+        ),
+        executar=lambda sessao, conversa, args: reservar_chassi(
+            sessao, conversa, str(args["chassi"]), str(args.get("approval_id", ""))
         ),
     ),
     "transferir_para_humano": Tool(

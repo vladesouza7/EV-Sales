@@ -44,7 +44,7 @@ delegada a quem implementa, e autenticação não é decisão para delegar.
 | [S-02](S-02-chat-web-e-sessao.md) | Chat web e sessão | Streaming, modelo de conversa, etapas | ✔ pronta | |
 | [S-03](S-03-agente-aurora.md) | A Aurora | Tools, qualificação, **verificação numérica** | ◐ parcial — agente, tools e verificação sim; evals e 2 tools não | ✅ preço · ✅ autonomia · ✅ injection |
 | [S-04](S-04-fila-de-aprovacao.md) | Fila de aprovação | A pausa, a tela da Neuza, o Espelho de Condição | ◐ parcial — backend e Espelho sim; a tela não | |
-| [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ✗ não começada | ✅ concorrência |
+| [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ◐ parcial — a operação e o portão sim; a rotina periódica não | ✅ concorrência — **existe** |
 | [S-06](S-06-handoff-whatsapp.md) | Handoff WhatsApp | Token, webhook, continuidade | ✗ não começada | |
 | [S-07](S-07-test-drive.md) | Test drive | Agenda real, dossiê do vendedor, **desfecho** | ◐ parcial — agenda sim; §6, §8 e §9 não | |
 | [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo e teto sim; as duas telas não | |
@@ -56,10 +56,15 @@ Os cinco ✅ são os portões que **reprovam o build**. Eles existem porque risc
 automatizada é desejo, não requisito: enquanto o eval não bloqueia o merge, o ADR envelhece em
 silêncio dizendo que está tudo mitigado.
 
-**Nenhum dos cinco existe hoje**, e é bom que isso esteja escrito em vez de subentendido: três
-dependem da S-03, um da S-05, e a varredura de PII existe como teste pontual por endpoint
-([S-09](S-09-protecao-de-pii.md)), não como varredura. O CI que os executa é entrega da
-[S-10](S-10-operacao.md) e ainda não foi escrito.
+**Um dos cinco existe hoje**: o teste de concorrência da [S-05](S-05-reserva-de-chassi.md), que
+foi verificado contra uma versão deliberadamente quebrada da operação antes de ser aceito — portão
+que não reprova o código errado é decoração.
+
+Os outros quatro ainda não existem, e é bom que isso esteja escrito em vez de subentendido: três
+dependem dos evals da [S-03](S-03-agente-aurora.md), e a varredura de PII existe como teste pontual
+por endpoint ([S-09](S-09-protecao-de-pii.md)), não como varredura. O CI que executa os cinco é
+entrega da [S-10](S-10-operacao.md) e ainda não foi escrito — enquanto ele não existir, **nenhum
+deles bloqueia merge de verdade**.
 
 ## Como uma spec vira código neste repositório
 

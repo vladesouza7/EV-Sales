@@ -20,6 +20,7 @@ alternativas que foram descartadas e as consequências aceitas — inclusive as 
 | [011](ADR-011-jornada-digital-termina-no-test-drive.md) | A jornada digital termina no test drive; a venda é presencial | NF, faturamento e crédito já existem no DMS | Simular a venda completa com NF-e |
 | [012](ADR-012-provedor-configuravel.md) | Provedor de LLM por configuração; a trilha diz se o custo é faturado | Não depender de uma conta em intermediário | Uma classe por fabricante |
 | [013](ADR-013-minio-para-arquivo-gerado.md) | MinIO volta, para arquivo gerado e foto que alguém sobe | Espelho em PDF e upload de foto | Guardar os arquivos no Postgres |
+| [014](ADR-014-configuracao-operacional-no-banco.md) | Credencial e número saem do `.env` para o banco, cifrados | A S-06 e uma chave que vence no sábado | Guardar em claro, protegido pelo perfil |
 
 ## As três que mais custaram
 

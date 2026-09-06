@@ -18,6 +18,7 @@ landing   chat    trace    Aurora   aprovação reserva  test drive       (fora 
                     │
    S-09 (PII) e S-10 (operação) atravessam todas, desde a primeira linha
    S-11 (autenticação) entra antes da S-04 — três entregas pedem "sessão autenticada"
+   S-12 (configurações) entra antes da S-06 — é lá que o número e a chave passam a existir
 ```
 
 A barra dupla é a fronteira do [ADR-011](../adr/ADR-011-jornada-digital-termina-no-test-drive.md):
@@ -38,6 +39,12 @@ A [S-11](S-11-autenticacao-e-perfis.md) nasceu depois das outras dez: três entr
 "sessão autenticada" e nenhuma dizia o que isso significa. Ambiguidade em spec é decisão
 delegada a quem implementa, e autenticação não é decisão para delegar.
 
+A [S-12](S-12-configuracoes.md) nasceu a pedido do analista, e muda uma decisão: o
+[ADR-012](../adr/ADR-012-provedor-configuravel.md) tinha posto a configuração do provedor no
+`.env`, e a [ADR-014](../adr/ADR-014-configuracao-operacional-no-banco.md) a tira de lá. Ela entra
+**antes** da [S-06](S-06-handoff-whatsapp.md) porque é onde o número da loja e a chave da Evolution
+passam a existir.
+
 | # | Spec | O que entrega | Estado | Portão de CI |
 |---|---|---|---|---|
 | [S-01](S-01-landing-e-captura-de-lead.md) | Landing e captura de lead | Página, formulário, catálogo somente-leitura | ✔ pronta | |
@@ -51,6 +58,7 @@ delegada a quem implementa, e autenticação não é decisão para delegar.
 | [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem, máscara e a varredura sim; retenção não | ✅ varredura de logs — **existe** |
 | [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose, seed e o CI sim; backup e runbook não | |
 | [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ◐ parcial — login, sessão e perfis sim; as telas são da S-04 e da S-08 | |
+| [S-12](S-12-configuracoes.md) | Configurações | Credencial e número sem `ssh`, cifrados | ✗ não começada — spec escrita, aguardando revisão | |
 
 Os cinco ✅ são os portões que **reprovam o build**. Eles existem porque risco sem verificação
 automatizada é desejo, não requisito: enquanto o eval não bloqueia o merge, o ADR envelhece em

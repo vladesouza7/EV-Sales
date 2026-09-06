@@ -302,3 +302,50 @@ input[type="date"] { color-scheme: light dark; }
   font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
   padding: 6px 14px;
 }
+
+/* ── S-11 · entrar ───────────────────────────────────────────────────────────── */
+
+.tela-centrada { min-height: 100dvh; display: grid; place-items: center; padding: 20px; }
+.tela-centrada .formulario { width: min(380px, 100%); }
+.tela-centrada h1 { font-size: 1.4rem; letter-spacing: -.03em; margin: 0 0 4px; }
+.tela-centrada .detalhe { margin: 0 0 20px; }
+
+/* ── S-04 §4 · a fila da Neuza ───────────────────────────────────────────────── */
+
+/* Feita para 30 segundos, no celular, em pé. Sem menu, sem filtro, sem paginação. */
+.fila { display: grid; gap: 16px; padding: 20px 0 40px; }
+.fila > p { color: var(--muted); text-align: center; padding: 40px 0; }
+
+.pedido {
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 18px; box-shadow: 0 12px 40px var(--shadow);
+}
+.pedido header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.pedido .quem { font-weight: 800; letter-spacing: -.02em; }
+/* A contagem pressiona pelo lado certo: quem espera é o cliente, não a fila. */
+.pedido .desde { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.pedido .desde[data-urgente="sim"] { color: var(--erro); font-weight: 700; }
+.pedido .carro { margin: 12px 0 2px; font-size: 1.05rem; }
+.pedido .valor {
+  font-size: 1.6rem; font-weight: 800; letter-spacing: -.04em; margin: 12px 0 2px;
+}
+.pedido .contexto { margin-top: 10px; }
+.pedido .escalado {
+  display: inline-block; margin-top: 10px; font-size: .72rem; font-weight: 700;
+  color: var(--erro); border: 1px solid var(--erro); border-radius: 40px; padding: 3px 10px;
+}
+
+/* Alvo de toque ≥ 48px, polegar alcança sem reposicionar (S-04 §4). */
+.decisao { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-top: 16px; }
+.decisao button { min-height: 56px; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; }
+.aprovar { border: 0; background: linear-gradient(135deg, #1f9d55, #157f43); color: #fff; font-size: 1.05rem; }
+.recusar { border: 1px solid var(--line); background: none; color: var(--muted); }
+.recusar:hover { border-color: var(--erro); color: var(--erro); }
+
+.motivos { display: grid; gap: 8px; margin-top: 12px; }
+.motivos button {
+  min-height: 48px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg-secondary); color: var(--ink); font: inherit; cursor: pointer;
+}
+.motivos button:hover { border-color: var(--erro); }
+.motivos .cancelar { color: var(--muted); border-style: dashed; }

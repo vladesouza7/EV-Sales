@@ -354,3 +354,35 @@ def _texto_do_pdf(pdf: bytes) -> str:
         elif dentro:
             atual.append(chr(byte))
     return " ".join(literais)
+
+
+# ── as telas (§4) e o link de uso único (S-11 §7) ────────────────────────────────
+
+
+def test_as_paginas_sobem(cliente: TestClient) -> None:
+    for caminho in ("/entrar", "/aprovacoes"):
+        resposta = cliente.get(caminho)
+        assert resposta.status_code == 200
+        assert "text/html" in resposta.headers["content-type"]
+
+
+def test_o_link_de_uso_unico_leva_ao_card_e_so_serve_uma_vez(
+    cliente: TestClient, sessao: Session, conversa: Conversa
+) -> None:
+    solicitar_aprovacao(sessao, conversa, str(SEAL["chassi"]))
+    pedido = sessao.scalars(select(PedidoDeAprovacao)).one()
+
+    primeira = cliente.get(f"/a/{pedido.codigo}", follow_redirects=False)
+    assert primeira.status_code == 303
+    assert primeira.headers["location"] == f"/aprovacoes?pedido={pedido.id}"
+
+    # Segunda vez cai na fila: o código é de uso único (S-04 §3).
+    segunda = cliente.get(f"/a/{pedido.codigo}", follow_redirects=False)
+    assert segunda.headers["location"] == "/aprovacoes"
+
+
+def test_codigo_invalido_nao_conta_se_existe(cliente: TestClient) -> None:
+    """Distinguir "não existe" de "já usado" contaria a quem sonda que o código valia."""
+    resposta = cliente.get("/a/naoexiste", follow_redirects=False)
+    assert resposta.status_code == 303
+    assert resposta.headers["location"] == "/aprovacoes"

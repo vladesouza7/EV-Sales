@@ -43,7 +43,7 @@ delegada a quem implementa, e autenticação não é decisão para delegar.
 | [S-01](S-01-landing-e-captura-de-lead.md) | Landing e captura de lead | Página, formulário, catálogo somente-leitura | ✔ pronta | |
 | [S-02](S-02-chat-web-e-sessao.md) | Chat web e sessão | Streaming, modelo de conversa, etapas | ✔ pronta | |
 | [S-03](S-03-agente-aurora.md) | A Aurora | Tools, qualificação, **verificação numérica** | ◐ parcial — agente, tools e verificação sim; evals e 2 tools não | ✅ preço · ✅ autonomia · ✅ injection |
-| [S-04](S-04-fila-de-aprovacao.md) | Fila de aprovação | A pausa, a tela da Neuza, o Espelho de Condição | ◐ parcial — backend e Espelho sim; a tela não | |
+| [S-04](S-04-fila-de-aprovacao.md) | Fila de aprovação | A pausa, a tela da Neuza, o Espelho de Condição | ◐ parcial — fila, Espelho e tela sim; a notificação por WhatsApp não | |
 | [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ◐ parcial — a operação e o portão sim; a rotina periódica não | ✅ concorrência — **existe** |
 | [S-06](S-06-handoff-whatsapp.md) | Handoff WhatsApp | Token, webhook, continuidade | ✗ não começada | |
 | [S-07](S-07-test-drive.md) | Test drive | Agenda real, dossiê do vendedor, **desfecho** | ◐ parcial — agenda sim; §6, §8 e §9 não | |

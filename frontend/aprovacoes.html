@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aprovações — Sol &amp; Volt Veículos Elétricos</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+  <script src="/static/tema.js"></script>
+</head>
+
+<body>
+  <header class="wrap nav">
+    <a class="marca" href="/aprovacoes">
+      <span class="marca-simbolo">⚡</span>
+      <span>
+        <b>Aprovações</b>
+        <small id="quem">carregando…</small>
+      </span>
+    </a>
+    <span class="acoes">
+      <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+      <button class="humano" type="button" id="sair">sair</button>
+    </span>
+  </header>
+
+  <main class="wrap fila" id="fila" aria-live="polite">
+    <p>Carregando a fila…</p>
+  </main>
+
+  <script>
+    var MOTIVOS = ["preço", "unidade prometida", "cliente conhecido", "outro"];
+    var fila = document.getElementById("fila");
+    var emAberto = null; // id do card com a lista de motivos aberta
+
+    function real(centavos) {
+      return (centavos / 100).toLocaleString("pt-BR", {
+        style: "currency", currency: "BRL", maximumFractionDigits: 0
+      });
+    }
+
+    function desde(segundos) {
+      if (segundos < 60) return "há " + segundos + " seg";
+      var minutos = Math.floor(segundos / 60);
+      return "há " + minutos + " min";
+    }
+
+    function contexto(qualificacao) {
+      var partes = [];
+      if (qualificacao.km_dia) partes.push(qualificacao.km_dia + " km/dia");
+      if (qualificacao.uso) partes.push(qualificacao.uso);
+      if (qualificacao.cidade) partes.push(qualificacao.cidade);
+      if (qualificacao.tem_carregador) partes.push("carregador em casa");
+      if (qualificacao.orcamento_max_centavos) {
+        partes.push("até " + real(qualificacao.orcamento_max_centavos));
+      }
+      return partes.join(" · ");
+    }
+
+    function irParaLogin() {
+      location.href = "/entrar?destino=" + encodeURIComponent(location.pathname + location.search);
+    }
+
+    async function pedir(caminho, opcoes) {
+      var resposta = await fetch(caminho, opcoes);
+      if (resposta.status === 401) { irParaLogin(); throw new Error("sem sessão"); }
+      return resposta;
+    }
+
+    function cartao(pedido) {
+      var artigo = document.createElement("article");
+      artigo.className = "pedido";
+      artigo.id = "pedido-" + pedido.id;
+
+      var urgente = pedido.segundos_desde_o_pedido >= 900 ? "sim" : "nao";
+      var linhaContexto = contexto(pedido.qualificacao);
+      artigo.innerHTML =
+        '<header><span class="quem"></span>' +
+        '<span class="desde" data-urgente="' + urgente + '"></span></header>' +
+        '<p class="carro"></p>' +
+        '<p class="detalhe cor-chassi"></p>' +
+        '<p class="valor"></p>' +
+        '<p class="detalhe">sai do estoque por 72h</p>' +
+        (linhaContexto ? '<p class="detalhe contexto"></p>' : "") +
+        (pedido.escalado ? '<span class="escalado">sem resposta há 15 min</span>' : "") +
+        '<div class="decisao">' +
+        '<button class="aprovar" type="button">APROVAR</button>' +
+        '<button class="recusar" type="button">recusar</button>' +
+        "</div>";
+
+      // textContent e não innerHTML: o nome vem do banco, e nome com "<" não vira marcação.
+      artigo.querySelector(".quem").textContent = pedido.cliente;
+      artigo.querySelector(".desde").textContent = desde(pedido.segundos_desde_o_pedido);
+      artigo.querySelector(".carro").textContent = pedido.veiculo;
+      artigo.querySelector(".cor-chassi").textContent =
+        pedido.cor + " · chassi …" + pedido.chassi_final;
+      artigo.querySelector(".valor").textContent = real(pedido.preco_centavos);
+      if (linhaContexto) artigo.querySelector(".contexto").textContent = linhaContexto;
+
+      // S-04 §4: aprovar é um toque, sem confirmação. Confirmação dobra o tempo e treina
+      // o toque automático — a reversão existe na tela do vendedor, não aqui.
+      artigo.querySelector(".aprovar").addEventListener("click", function () {
+        decidir(pedido.id, "aprovar", null, artigo);
+      });
+      artigo.querySelector(".recusar").addEventListener("click", function () {
+        abrirMotivos(pedido.id, artigo);
+      });
+      if (emAberto === pedido.id) abrirMotivos(pedido.id, artigo);
+      return artigo;
+    }
+
+    function abrirMotivos(id, artigo) {
+      if (artigo.querySelector(".motivos")) return;
+      emAberto = id;
+      var caixa = document.createElement("div");
+      caixa.className = "motivos";
+      MOTIVOS.forEach(function (motivo) {
+        var botao = document.createElement("button");
+        botao.type = "button";
+        botao.textContent = motivo;
+        botao.addEventListener("click", function () {
+          decidir(id, "recusar", motivo, artigo);
+        });
+        caixa.appendChild(botao);
+      });
+      var cancelar = document.createElement("button");
+      cancelar.type = "button";
+      cancelar.className = "cancelar";
+      cancelar.textContent = "voltar";
+      cancelar.addEventListener("click", function () { emAberto = null; caixa.remove(); });
+      caixa.appendChild(cancelar);
+      artigo.appendChild(caixa);
+    }
+
+    async function decidir(id, acao, motivo, artigo) {
+      artigo.querySelectorAll("button").forEach(function (b) { b.disabled = true; });
+      try {
+        var resposta = await pedir("/api/aprovacoes/" + id + "/" + acao, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: motivo ? JSON.stringify({ motivo: motivo }) : undefined
+        });
+        if (!resposta.ok) {
+          var corpo = await resposta.json().catch(function () { return {}; });
+          alert((corpo.detail && corpo.detail.mensagem) || "Não deu para registrar a decisão.");
+        }
+      } catch (falha) { return; }
+      emAberto = null;
+      carregar();
+    }
+
+    async function carregar() {
+      var resposta;
+      try { resposta = await pedir("/api/aprovacoes"); } catch (falha) { return; }
+
+      if (resposta.status === 404) {
+        fila.innerHTML = "<p>Este acesso não alcança a fila de aprovação.</p>";
+        return;
+      }
+      var pedidos = await resposta.json();
+      fila.textContent = "";
+      if (!pedidos.length) {
+        fila.innerHTML = "<p>Nada esperando decisão agora.</p>";
+        return;
+      }
+      pedidos.forEach(function (pedido) { fila.appendChild(cartao(pedido)); });
+    }
+
+    document.getElementById("sair").addEventListener("click", async function () {
+      await fetch("/api/sair", { method: "POST" });
+      location.href = "/entrar";
+    });
+
+    (async function inicio() {
+      try {
+        var eu = await (await pedir("/api/eu")).json();
+        document.getElementById("quem").textContent = eu.nome;
+      } catch (falha) { return; }
+      carregar();
+      // S-04 §4 pede atualização em tempo real, sem recarregar. ponytail: uma varredura
+      // a cada 5 s resolve para uma fila de poucos cards; vira SSE se um dia a tela
+      // ficar aberta o dia inteiro e o polling aparecer no custo.
+      setInterval(carregar, 5000);
+    })();
+  </script>
+</body>
+
+</html>

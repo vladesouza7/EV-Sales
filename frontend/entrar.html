@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Entrar — Sol &amp; Volt Veículos Elétricos</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+  <script src="/static/tema.js"></script>
+</head>
+
+<body>
+  <main class="tela-centrada">
+    <form class="formulario" id="forma">
+      <h1>Sol &amp; Volt</h1>
+      <p class="detalhe">Acesso da equipe. Clientes não entram por aqui.</p>
+
+      <p class="aviso-erro" id="erro" role="alert"></p>
+
+      <label for="email">E-mail</label>
+      <!-- `autocomplete` correto e sem bloquear colar: com a sessão de 20 minutos da
+           S-11 §4, a Neuza digita a senha várias vezes ao dia, e bloquear o gerenciador
+           em nome de segurança é o que faz a senha virar curta e digitável. -->
+      <input id="email" name="email" type="email" autocomplete="username"
+             required autofocus />
+
+      <label for="senha">Senha</label>
+      <input id="senha" name="senha" type="password" autocomplete="current-password" required />
+
+      <button class="principal" type="submit" id="botao">Entrar</button>
+    </form>
+  </main>
+
+  <script>
+    // O destino sobrevive ao login (S-11 §4): sem isto a Neuza cairia na fila genérica
+    // e teria de procurar o card, que é o que transforma 30 segundos em dois minutos.
+    var destino = new URLSearchParams(location.search).get("destino") || "/aprovacoes";
+
+    document.getElementById("forma").addEventListener("submit", async function (evento) {
+      evento.preventDefault();
+      var erro = document.getElementById("erro");
+      var botao = document.getElementById("botao");
+      erro.textContent = "";
+      botao.disabled = true;
+
+      try {
+        var resposta = await fetch("/api/entrar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: document.getElementById("email").value,
+            senha: document.getElementById("senha").value
+          })
+        });
+        if (resposta.ok) {
+          location.href = destino.startsWith("/") ? destino : "/aprovacoes";
+          return;
+        }
+        var corpo = await resposta.json().catch(function () { return {}; });
+        erro.textContent = (corpo.detail && corpo.detail.mensagem) || "Não foi possível entrar.";
+      } catch (falha) {
+        erro.textContent = "Sem conexão com o sistema.";
+      }
+      botao.disabled = false;
+    });
+  </script>
+</body>
+
+</html>

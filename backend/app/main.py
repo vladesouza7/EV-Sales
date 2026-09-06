@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.responses import Response as RespostaCrua
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
@@ -19,11 +19,11 @@ from app.autenticacao import Autenticado
 from app.autenticacao import router as rotas_de_autenticacao
 from app.conversas import router as rotas_de_conversa
 from app.core.pii import decifrar
-from app.db import obter_sessao
+from app.db import agora, obter_sessao
 from app.ia.tools.estoque import buscar_unidades
 from app.ia.turno import PROVEDOR
 from app.leads import LeadEntrada, abrir_conversa, gravar_cookie
-from app.modelos import Conversa, Lead
+from app.modelos import Conversa, Lead, PedidoDeAprovacao
 from app.observabilidade import registrar
 from app.testdrive import router as rotas_de_test_drive
 
@@ -152,6 +152,43 @@ def saude_das_dependencias(sessao: BancoDeDados, resposta: Response) -> dict[str
         resposta.status_code = 503
         return {**estado, "postgres": "indisponivel"}
     return {**estado, "postgres": "ok"}
+
+
+@app.get("/entrar", include_in_schema=False)
+def pagina_de_login() -> FileResponse:
+    return FileResponse(FRONTEND / "entrar.html")
+
+
+@app.get("/aprovacoes", include_in_schema=False)
+def pagina_de_aprovacoes() -> FileResponse:
+    """A tela é pública; o que ela mostra não é.
+
+    Quem barra é a API: sem sessão, `/api/aprovacoes` devolve 401 e a página manda para o
+    login guardando o destino. Proteger o HTML também não acrescentaria nada — ele não
+    contém dado nenhum.
+    """
+    return FileResponse(FRONTEND / "aprovacoes.html")
+
+
+@app.get("/a/{codigo}", include_in_schema=False)
+def atalho_de_aprovacao(codigo: str, sessao: BancoDeDados) -> RedirectResponse:
+    """S-04 §3 e S-11 §7 — o link da notificação da Neuza.
+
+    Leva ao card certo e **não substitui o login**: quem confere a sessão é a API da
+    página de destino. Código inválido ou já usado cai na fila, sem contar qual dos dois
+    aconteceu.
+    """
+    pedido = sessao.scalars(
+        select(PedidoDeAprovacao).where(
+            PedidoDeAprovacao.codigo == codigo,
+            PedidoDeAprovacao.codigo_usado_em.is_(None),
+        )
+    ).one_or_none()
+    if pedido is None:
+        return RedirectResponse("/aprovacoes", status_code=303)
+    pedido.codigo_usado_em = agora()
+    sessao.commit()
+    return RedirectResponse(f"/aprovacoes?pedido={pedido.id}", status_code=303)
 
 
 @app.get("/", include_in_schema=False)

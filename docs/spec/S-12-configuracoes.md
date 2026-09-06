@@ -140,6 +140,13 @@ configuracoes (banco)  →  .env  →  o padrão do preset
 Num leitor só, `app/configuracao.py`. Cache em processo de **30 segundos**, invalidado na escrita do
 próprio processo.
 
+**Salvar na tela grava no banco, e só no banco. Nada, em nenhum caminho, escreve no `.env`** — ele é
+gerado pelo [`gerar-segredos.sh`](../../scripts/gerar-segredos.sh) e sobrescrito no deploy seguinte,
+então a troca feita pela tela sumiria sem aviso. O `.env` responde por uma chave em duas situações,
+e só nelas: instalação nova, antes de alguém abrir a tela, e o CI dos evals da
+[S-03 §8](S-03-agente-aurora.md), que injeta a chave do provedor por variável de ambiente sem passar
+por navegador.
+
 O provedor passa a ser montado **no início de cada turno**, a partir desse leitor, e não uma vez no
 import como hoje ([`app/ia/provedor.py`](../../backend/app/ia/provedor.py)). Sem isso, salvar na tela
 não teria efeito até alguém reiniciar a API — que é exatamente o passo que esta spec existe para
@@ -149,6 +156,11 @@ Critério concreto: **a troca vale no próximo turno, em no máximo 30 segundos.
 
 Cada campo da tela diz de onde o valor em uso está vindo (`banco`, `.env` ou `padrão`). É o que
 evita o incidente previsível: alguém edita o `.env`, nada muda, e ninguém entende por quê.
+
+E quando o valor vem do banco **e** existe um diferente no `.env`, o campo avisa — porque o que
+sobrou no arquivo é uma credencial antiga, viva, num arquivo do servidor. O runbook da
+[S-10 §6](S-10-operacao.md) ganha a linha correspondente: **configurou pela tela, esvazie a linha no
+`.env`.** Chave rotacionada que continua legível no disco é a rotação não tendo acontecido.
 
 ### 7. Rastro
 

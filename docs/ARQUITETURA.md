@@ -198,7 +198,7 @@ Cada corte tem ADR:
 | Cortado | Substituído por | ADR |
 |---|---|---|
 | Qdrant | pgvector no mesmo Postgres | [002](adr/ADR-002-pgvector-em-vez-de-qdrant.md) |
-| MinIO | Volume Docker | [S-10](spec/S-10-operacao.md) |
+| ~~MinIO~~ → **voltou** | — | [013](adr/ADR-013-minio-para-arquivo-gerado.md) — o corte valia para foto estática, não para arquivo gerado nem para upload |
 | Prometheus + Grafana + Loki | Langfuse + healthcheck | [006](adr/ADR-006-observabilidade-e-teto-de-custo.md) |
 | Framework de orquestração | Loop de tools + estado no Postgres | [009](adr/ADR-009-sem-framework-de-orquestracao.md) |
 | MongoDB | Postgres | [001](adr/ADR-001-postgres-fonte-da-verdade.md) |

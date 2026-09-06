@@ -10,6 +10,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "alembic>=1.14",
     "cryptography>=44.0",
+    "minio>=7.2.20",
 ]
 
 [dependency-groups]

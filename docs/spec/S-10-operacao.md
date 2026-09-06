@@ -54,11 +54,14 @@ Que alguém que não sou eu suba o EV-Sales do zero, sem me perguntar nada, segu
 | `langfuse` | oficial | Trace e custo ([ADR-006](../adr/ADR-006-observabilidade-e-teto-de-custo.md)) |
 | `frontend` | build local | Landing, chat, telas internas |
 | `nginx` | `nginx:alpine` | Só no perfil `prod` |
+| `minio` | `minio/minio` | Fotos de unidade e o PDF do Espelho ([ADR-013](../adr/ADR-013-minio-para-arquivo-gerado.md)) |
 
-**Sem Qdrant, sem MinIO, sem Prometheus, sem Grafana, sem Loki** — cada ausência tem ADR.
+**Sem Qdrant, sem Prometheus, sem Grafana, sem Loki** — cada ausência tem ADR.
 
-Fotos de veículo ficam em volume servido pelo nginx. São ~20 arquivos; object store é overkill
-declarado.
+O MinIO estava nesta lista e **voltou** ([ADR-013](../adr/ADR-013-minio-para-arquivo-gerado.md)).
+A frase que o cortava — "são ~20 arquivos, object store é overkill" — valia para foto estática
+pré-carregada no volume, e não cobre os dois casos reais: foto que alguém **sobe** depois do
+deploy, e o PDF do Espelho, que é **gerado** em runtime e carrega PII.
 
 ### 2. Subir do zero
 
@@ -113,7 +116,8 @@ Os chassis do seed são fictícios e marcados como tal.
 | Postgres (`pg_dump`) | diário, 03h | volume + cópia externa | 30 dias |
 | `EVSALES_PII_KEY` e `PEPPER` | manual, na criação | **fora do servidor** — gerenciador de senhas do Raí | — |
 | Sessão da Evolution | diário | volume | 7 dias |
-| Volume de fotos | semanal | volume | 4 semanas |
+| MinIO — `fotos/` | semanal | volume | 4 semanas |
+| MinIO — `documentos/` | diário, 03h | volume + cópia externa | 30 dias, e a retenção da [S-09 §6](S-09-protecao-de-pii.md) apaga junto com o lead |
 
 > **Perder a chave de PII é perder o acesso a todos os nomes e telefones.** O backup do banco sem a
 > chave é inútil. Está em negrito no README e no runbook porque é o erro que não tem conserto.

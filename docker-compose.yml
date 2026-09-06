@@ -14,16 +14,38 @@ services:
       interval: 5s
       retries: 10
 
+  # ADR-013. A porta é publicada em dev pelo mesmo motivo que a do postgres: o
+  # `subir-dev.sh` roda o uvicorn fora do compose. No perfil `prod` os dois ficam atrás
+  # do nginx. O que protege o Espelho não é a porta fechada — é o bucket privado e a
+  # validação de prefixo na única rota que recebe nome vindo de fora.
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports: ["9000:9000", "9001:9001"]
+    environment:
+      MINIO_ROOT_USER: ${EVSALES_MINIO_ACCESS_KEY:-evsales}
+      MINIO_ROOT_PASSWORD: ${EVSALES_MINIO_SECRET_KEY:-evsales-local}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 5s
+      retries: 10
+
   api:
     build: ./backend
     env_file: .env
     environment:
       EVSALES_DATABASE_URL: postgresql+psycopg://evsales:${POSTGRES_PASSWORD:-evsales}@postgres:5432/evsales
+      EVSALES_MINIO_ENDPOINT: minio:9000
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports: ["8000:8000"]
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
 
 volumes:
   pgdata:
+  miniodata:

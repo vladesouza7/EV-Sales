@@ -7,10 +7,12 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import Response as RespostaCrua
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.arquivos import NomeInvalido, caminho_da_foto, ler
 from app.conversas import router as rotas_de_conversa
 from app.db import obter_sessao
 from app.ia.tools.estoque import buscar_unidades
@@ -49,6 +51,28 @@ async def erro_sem_eco_de_pii(_: Request, erro: RequestValidationError) -> JSONR
             ]
         },
     )
+
+
+@app.get("/fotos/{nome}", include_in_schema=False)
+def foto(nome: str) -> RespostaCrua:
+    """ADR-013 — a única rota onde nome vindo da internet vira caminho de objeto.
+
+    Serve **exclusivamente** o prefixo `fotos/`. Sem a validação em `caminho_da_foto`,
+    `/fotos/../documentos/espelho-0042.pdf` seria uma rota pública para o documento com o
+    nome do cliente — e nenhuma proteção do ADR-007 alcança um arquivo servido assim.
+
+    Nome inválido e arquivo ausente devolvem o mesmo 404: distinguir os dois contaria a
+    quem sonda que o prefixo de documentos existe.
+    """
+    try:
+        conteudo = ler(caminho_da_foto(nome))
+    except NomeInvalido:
+        conteudo = None
+    if conteudo is None:
+        return RespostaCrua(status_code=404)
+    bytes_, tipo = conteudo
+    # Foto de carro não muda; o catálogo é a página mais aberta do site.
+    return RespostaCrua(bytes_, media_type=tipo, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/health", include_in_schema=False)

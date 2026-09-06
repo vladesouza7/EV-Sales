@@ -38,26 +38,27 @@ usuarios
   perfil ('dono' | 'gerente' | 'vendedor'),
   vendedor_id  → vendedores.id, NULL para dono e gerente,
   ativo, criado_em, senha_trocada_em,
-  tentativas_falhas, bloqueado_ate
-
-sessoes
-  id, usuario_id, token_hash (UNIQUE, indexado),
-  criada_em, expira_em, ultimo_uso_em,
-  user_agent_resumo, revogada_em
+  tentativas_falhas, bloqueado_ate,
+  sessoes_validas_apos   -- carimbo de revogação; ver §4
 ```
 
-Duas escolhas que não são detalhe:
+**Não há tabela de sessões.** A sessão é um **JWT** assinado com `EVSALES_JWT_SECRET`, que está no
+`.env` desde o primeiro commit e finalmente passa a ser usado.
 
-**O token da sessão é opaco e mora no banco, não é JWT.** O `EVSALES_JWT_SECRET` está no `.env`
-desde o primeiro commit e **deixa de ser usado** — se esta spec for aprovada, a variável sai. O
-motivo é revogação: a Neuza esquece o celular no balcão do café e o Raí precisa derrubar aquela
-sessão **agora**. Com JWT isso exige uma lista de bloqueio, que é um banco de sessões com outro
-nome e menos honesto. Uma linha em `sessoes` com `revogada_em` preenchido resolve, e usa o mesmo
-padrão que `conversas.token_sessao` já usa na [S-01](S-01-landing-e-captura-de-lead.md).
+A objeção clássica a JWT é revogação — o token vale até expirar, e não há como cancelá-lo. Ela
+perde força aqui por causa da §4: **com 20 minutos de validade, a expiração já é a revogação.** Um
+JWT de 30 dias precisaria de lista de bloqueio, que é uma tabela de sessões com outro nome; um de
+20 minutos não precisa.
 
-**O token é guardado como hash, nunca em claro** — `sha256`, procurado por igualdade, exatamente
-como `leads.telefone_hash` ([ADR-007](../adr/ADR-007-pii-cifrada-e-mascarada.md)). Um dump do banco
-não entrega sessão ativa de ninguém.
+O que sobra de revogação é o caso "o Raí precisa derrubar **agora**", e ele é resolvido por uma
+coluna, não por uma tabela: `usuarios.sessoes_validas_apos`. Todo token carrega o `iat`, e um token
+emitido antes desse carimbo é recusado. Preencher o carimbo invalida, na próxima requisição, tudo
+o que foi emitido para aquela pessoa.
+
+**A consequência aceita, e ela é real:** a revogação é **por usuário, não por dispositivo**.
+Derrubar o celular perdido da Neuza derruba junto a sessão dela no computador. Para quatro pessoas
+numa loja isso é aceitável — ela entra de novo. Revogação por dispositivo exigiria guardar cada
+`jti` emitido, e guardar cada `jti` é ter a tabela de sessões de volta.
 
 `vendedor_id` liga o usuário à linha em `vendedores` que a [S-07](S-07-test-drive.md) já criou. Não
 há duas tabelas de pessoa: `vendedores` é quem atende, `usuarios` é quem faz login, e o Tarcísio é
@@ -83,12 +84,38 @@ confirma que a conta existe para quem está tentando adivinhar.
 
 | Regra | Valor |
 |---|---|
+| Formato | JWT assinado em **HS256** com `EVSALES_JWT_SECRET` |
 | Cookie | `ev_staff`, `HttpOnly`, `SameSite=Lax`, `Secure` no perfil `prod` |
-| Token | 32 bytes de `secrets.token_urlsafe`, guardado como `sha256` |
-| Inatividade | **20 minutos sem uso** encerra a sessão |
-| Renovação | cada requisição autenticada empurra `expira_em` para `agora + 20 min` |
-| Limite absoluto | **12 horas** desde `criada_em`, mesmo em uso contínuo |
-| Revogação | `POST /sair` encerra a atual; o Raí encerra qualquer uma pela tela de usuários |
+| Inatividade | **20 minutos** — é o `exp` do token |
+| Renovação | faltando menos de **10 minutos** para o `exp`, a resposta traz um token novo |
+| Limite absoluto | **12 horas** desde o login, na claim `inicio`, que a renovação copia adiante |
+| Revogação | `POST /sair` limpa o cookie; `usuarios.sessoes_validas_apos` derruba tudo daquela pessoa |
+
+O token vai em **cookie `HttpOnly`, não em `localStorage`**. JWT em `localStorage` é legível por
+qualquer script na página, e o custo de um XSS deixa de ser "roubaram a tela" e passa a ser
+"roubaram a credencial da gerente". `SameSite=Lax` cobre o POST de outro site, que é o que
+substitui um token anti-CSRF neste desenho.
+
+**Claims, e nada além delas:**
+
+| Claim | Para quê |
+|---|---|
+| `sub` | id do usuário |
+| `perfil` | `dono`, `gerente` ou `vendedor` |
+| `iat` | comparado com `sessoes_validas_apos` na revogação |
+| `exp` | `iat + 20 min` |
+| `inicio` | horário do login **original**, preservado pela renovação — é o que sustenta as 12 horas |
+
+**Nome, e-mail e telefone não entram no token.** JWT não é cifrado, é assinado: qualquer pessoa
+com o cookie lê o conteúdo. Colocar PII ali seria PII em claro numa das quatro superfícies que a
+invariante 5 nomeia ([ADR-007](../adr/ADR-007-pii-cifrada-e-mascarada.md)).
+
+**Toda requisição autenticada lê a linha do usuário.** É uma busca por chave primária, na mesma
+transação que a rota já abre, e é ela que faz valerem três coisas que a assinatura sozinha não
+garante: `ativo = false` tira a pessoa na hora, `perfil` alterado passa a valer na hora, e
+`sessoes_validas_apos` funciona. **Sem essa leitura, um usuário desativado continuaria entrando
+por até 20 minutos** — e o desenho ficaria stateless de verdade, ao preço de o Raí não conseguir
+desligar ninguém.
 
 **Vinte minutos é a janela de exposição de um celular perdido**, e é o número que manda nesta
 spec. Um aparelho esquecido no balcão do café vira acesso à fila de aprovação por vinte minutos,
@@ -109,9 +136,14 @@ Vinte minutos também **casa com o relógio do pedido**: a [S-04 §2](S-04-fila-
 `expira_em = agora + 20 min` ao pedido de aprovação. Sessão e pedido morrem na mesma escala, então
 não existe o caso de uma sessão viva apontando para um pedido morto há horas.
 
-O limite absoluto de 12 horas existe porque renovação a cada uso, sozinha, é sessão eterna: um
-aparelho usado a cada dezenove minutos nunca expiraria. Doze horas é um expediente. **É a única
-regra desta tabela que não foi pedida — diga se quer fora.**
+O limite absoluto de 12 horas existe porque renovação, sozinha, é sessão eterna: um aparelho usado
+a cada dezenove minutos receberia token novo para sempre. Doze horas é um expediente, e a claim
+`inicio` é o que impede a renovação de reiniciar o relógio. **É a única regra desta tabela que não
+foi pedida — diga se quer fora.**
+
+Com isso, a exposição de um celular perdido é de **20 minutos** se ninguém notar, e acaba na
+requisição seguinte assim que o Raí preencher o carimbo. O teto de 12 horas é o pior caso de um
+aparelho em uso contínuo por quem o levou, e é o motivo de ele existir.
 
 Aprovar **não pede senha de novo** dentro da janela. A proteção do irreversível é a pausa humana
 registrada — `decidido_por` e `decidido_em` em todo pedido ([ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md)) —, não repetir a senha a cada toque.
@@ -174,8 +206,9 @@ Trocar senha: o próprio usuário em `/minha-senha`, informando a senha atual. E
 script. É o procedimento de uma loja com quatro funcionários, e está no runbook da
 [S-10 §6](S-10-operacao.md).
 
-Trocar a senha **revoga todas as sessões daquele usuário**, inclusive a que fez a troca. É o que
-torna "perdi o celular" resolvível pelo próprio dono da conta, sem esperar o Raí.
+Trocar a senha preenche `sessoes_validas_apos = agora`, o que **derruba todos os tokens daquele
+usuário**, inclusive o que fez a troca. É o que torna "perdi o celular" resolvível pelo próprio
+dono da conta, sem esperar o Raí — e é a mesma alavanca que o Raí usa em `/usuarios`.
 
 ---
 
@@ -246,22 +279,33 @@ Cenário: trocar a senha derruba as sessões
   Então as duas sessões deixam de valer
   E ela precisa entrar de novo nos dois
 
-Cenário: o Raí derruba a sessão de um celular perdido
+Cenário: o Raí derruba as sessões de um celular perdido
   Dado que a Neuza perdeu o celular com sessão ativa
-  Quando o Raí revoga aquela sessão em /usuarios
+  Quando o Raí revoga as sessões dela em /usuarios
   Então a próxima requisição daquele celular é recusada
-  E as outras sessões da Neuza continuam valendo
+  E a sessão dela no computador também é recusada
+  E entrar de novo com a senha volta a funcionar
 
-Cenário: o token da sessão não existe em claro no banco
-  Quando uma sessão é criada
-  Então nenhuma coluna de "sessoes" contém o valor enviado no cookie
-  E a busca acontece pelo hash
+Cenário: usuário desativado sai na hora, não em 20 minutos
+  Dado que o Tarcísio tem token válido por mais 18 minutos
+  Quando o Raí marca a conta dele como inativa
+  Então a requisição seguinte dele é recusada
 
-Cenário: sessão revogada não ressuscita
-  Dado uma sessão com revogada_em preenchido
-  Quando o cookie dela é apresentado
+Cenário: o token não carrega PII
+  Quando um token é emitido para a Neuza
+  Então o payload contém apenas sub, perfil, iat, exp e inicio
+  E não contém nome, e-mail nem telefone
+
+Cenário: assinatura inválida não entra
+  Dado um token com o payload alterado e a assinatura original
+  Quando ele é apresentado
   Então a resposta é 401
-  E a sessão não é renovada
+  E nenhuma consulta ao usuário é feita
+
+Cenário: renovar não reinicia o relógio das 12 horas
+  Dado um token renovado cinco vezes ao longo de 11 horas
+  Então a claim "inicio" continua sendo a do login original
+  E uma hora depois o token é recusado mesmo estando dentro do exp
 ```
 
 ## Fora do escopo
@@ -277,5 +321,9 @@ Cenário: sessão revogada não ressuscita
 - **Permissão granular por recurso.** Três perfis fixos em código. Perfil configurável em banco é
   a porta pela qual alguém, um dia, dá aprovação a um vendedor sem passar por revisão — e é
   exatamente o que o [ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md) impede.
-- **Sessão por dispositivo com nome amigável.** `user_agent_resumo` basta para o Raí reconhecer
-  qual derrubar.
+- **Revogação por dispositivo.** A revogação é por usuário: derrubar o celular derruba o
+  computador junto. Guardar cada `jti` emitido para separar os dois é ter a tabela de sessões de
+  volta, e com quatro pessoas o ganho não paga. **Gatilho de revisão:** quando alguém precisar
+  ficar logado em dois lugares ao mesmo tempo e reclamar da queda dupla.
+- **Refresh token.** Renovar reemitindo o próprio token de 20 minutos resolve o mesmo problema com
+  um segredo a menos circulando.

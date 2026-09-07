@@ -43,6 +43,7 @@ def _schema() -> Iterator[None]:
     # Os EXCLUDE da S-07 são gist sobre uuid e text: sem btree_gist o create_all falha.
     with engine.begin() as conexao:
         conexao.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
+        conexao.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield

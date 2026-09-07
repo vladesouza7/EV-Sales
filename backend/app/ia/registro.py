@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.aprovacao import solicitar_aprovacao
 from app.ia.etapas import tools_da_etapa
+from app.ia.tools.conhecimento import buscar_conhecimento
 from app.ia.tools.estoque import buscar_unidades, comparar_unidades, detalhar_unidade
 from app.ia.tools.qualificacao import registrar_qualificacao, transferir_para_humano
 from app.modelos import Conversa
@@ -140,6 +141,30 @@ REGISTRO: dict[str, Tool] = {
         ),
         executar=lambda sessao, conversa, args: reservar_chassi(
             sessao, conversa, str(args["chassi"]), str(args.get("approval_id", ""))
+        ),
+    ),
+    "buscar_conhecimento": Tool(
+        nome="buscar_conhecimento",
+        descricao=(
+            "Busca na base de conhecimento sobre carregamento, rotas e viagens "
+            "(como João Pessoa a Recife pela BR-101), vida útil e durabilidade da bateria, "
+            "garantia de fábrica e custos de manutenção. Use para responder dúvidas de rotina "
+            "e quebrar objeções com dados consolidados da concessionária."
+        ),
+        parametros=_objeto(
+            {
+                "termo": {
+                    "type": "string",
+                    "description": (
+                        "Dúvida, tema ou objeção a pesquisar "
+                        "(ex: 'Recife BR-101', 'bateria viciar', 'garantia')."
+                    ),
+                }
+            },
+            ["termo"],
+        ),
+        executar=lambda sessao, _conversa, args: buscar_conhecimento(
+            sessao, str(args.get("termo", ""))
         ),
     ),
     "transferir_para_humano": Tool(

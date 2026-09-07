@@ -1,11 +1,11 @@
-"""Seed mínimo para a S-01: o catálogo público precisa de estoque para mostrar.
+"""Seed para o EV-Sales: catálogo, vendedores e base de conhecimento (S-01, S-03, S-10).
 
-Os chassis **e os preços** aqui são fictícios e estão marcados como tal. Autonomia e
+Os chassis e os preços aqui são fictícios e estão marcados como tal. Autonomia e
 fonte vêm de docs/pesquisa/CATALOGO-E-OBJECOES.md — nenhum número foi estimado, e o
-que não tem fonte confirmada entra `NULL` (ADR-003).
+que não tem fonte confirmada entra NULL (ADR-003).
 
-O seed completo da S-10 (58 modelos, 17 unidades, vendedores, base de conhecimento)
-ainda não existe. Este cobre o que a S-01 precisa para funcionar de ponta a ponta.
+A base de conhecimento cobre as 4 objeções clássicas (autonomia, tempo de carga, vida útil
+da bateria, custo de manutenção), garantia, carregamento e a rota João Pessoa–Recife (S-10 §4).
 
 Idempotente: rodar duas vezes não duplica.
 """
@@ -16,10 +16,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from sqlalchemy.dialects.postgresql import insert  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
 
 from app.core.pii import cifrar  # noqa: E402
 from app.db import Sessao  # noqa: E402
-from app.modelos import Unidade, Vendedor  # noqa: E402
+from app.ia.tools.conhecimento import ITENS_CONHECIMENTO, semear_conhecimento  # noqa: E402
+from app.modelos import ItemConhecimento, Unidade, Vendedor  # noqa: E402
 
 UNIDADES = [
     dict(
@@ -50,7 +52,6 @@ UNIDADES = [
         autonomia_fonte="INMETRO_PBEV_2026",
         foto_url="/static/fotos/dolphin-azul.jpg",
     ),
-    # O par que o Raí citou: mesmo modelo, duas cores, um de cada. Não existe "outro igual".
     dict(
         chassi="9BWZZZ377VT004471",
         marca="BYD",
@@ -93,7 +94,6 @@ UNIDADES = [
         autonomia_fonte="INMETRO_PBEV_2026",
         foto_url="/static/fotos/blazer-ev-rs.jpg",
     ),
-    # Importado: publica WLTP, e o rótulo viaja junto. WLTP e Inmetro não se comparam.
     dict(
         chassi="5YJYGDEE1LF100006",
         marca="Tesla",
@@ -108,7 +108,6 @@ UNIDADES = [
         autonomia_fonte="WLTP",
         foto_url="/static/fotos/model-y-branco.jpg",
     ),
-    # Sem número confirmado para esta versão: entra NULL, e a Aurora diz "vou confirmar".
     dict(
         chassi="WP0ZZZY1ZKSA09902",
         marca="Porsche",
@@ -125,9 +124,6 @@ UNIDADES = [
     ),
 ]
 
-
-# S-07 — a equipe da Sol & Volt. Telefones fictícios e cifrados como qualquer outro
-# (ADR-007): vendedor é PII também.
 VENDEDORES = [
     ("Jaqueline", "+5583988710002"),
     ("Tarcísio", "+5583988710001"),
@@ -149,10 +145,14 @@ def semear() -> None:
             )
             .on_conflict_do_nothing(index_elements=["nome"])
         )
+        total_conhecimento = semear_conhecimento(sessao)
         sessao.commit()
         total = sessao.query(Unidade).count()
         equipe = sessao.query(Vendedor).count()
-    print(f"seed ok · {total} unidades no estoque · {equipe} vendedores na agenda")
+    print(
+        f"seed ok · {total} unidades no estoque · {equipe} vendedores na agenda · "
+        f"{total_conhecimento} itens de conhecimento"
+    )
 
 
 if __name__ == "__main__":

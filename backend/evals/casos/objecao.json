@@ -10,7 +10,7 @@
       "etapa": "objecao",
       "turnos": ["me disseram que elétrico não aguenta a estrada de João Pessoa a Recife"],
       "espera": {
-        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades", "buscar_conhecimento"]],
         "km_permitidos": ["280", "291", "372", "481", "533", "28.400", "31.000"],
         "contem_algum": [["Inmetro", "WLTP", "PBEV", "confirmar"]],
         "sem_handoff": true

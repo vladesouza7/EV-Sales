@@ -146,6 +146,10 @@ def permitidos_de(fichas: list[dict[str, object]]) -> set[tuple[str, float]]:
             valor = ficha.get(campo)
             if isinstance(valor, int) and valor:
                 permitidos.add(("km", float(valor)))
+        conteudo = ficha.get("conteudo")
+        if isinstance(conteudo, str):
+            for num in extrair(conteudo):
+                permitidos.add((num.unidade, num.valor))
     return permitidos
 
 

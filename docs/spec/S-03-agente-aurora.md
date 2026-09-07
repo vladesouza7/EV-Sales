@@ -7,7 +7,7 @@
 | § | O que diz | Onde está |
 |---|---|---|
 | §1 | Estoque e a regra de autonomia | `app/ia/tools/estoque.py` — a frase da fonte é montada na tool |
-| §2 | Tools | 5 das 11: `buscar_unidades`, `detalhar_unidade`, `comparar_unidades`, `registrar_qualificacao`, `transferir_para_humano` |
+| §2 | Tools | 6 das 11: `buscar_unidades`, `detalhar_unidade`, `comparar_unidades`, `registrar_qualificacao`, `transferir_para_humano`, `buscar_conhecimento` |
 | §3 | Qualificação adaptativa | `app/ia/turno.py` — o salto da Persona 3 é regra de código, não de prompt |
 | §4 | **Verificação numérica** | `app/ia/verificacao.py`, com regeneração única e handoff |
 | §5 | Prompt | `app/ia/prompts/aurora_v1.md`, versão gravada no span do turno |
@@ -17,8 +17,6 @@
 
 **O que falta, e por quê:**
 
-- `buscar_conhecimento` — depende de pgvector e do conteúdo curado de objeções, que ainda
-  não foi escrito ([ADR-002](../adr/ADR-002-pgvector-em-vez-de-qdrant.md)).
 - `calcular_custo_km` — precisa de `bateria_kwh`, coluna que não existe. Criá-la é migration
   em `unidades`, que o [CLAUDE.md](../../CLAUDE.md) manda passar por revisão humana.
 - `solicitar_aprovacao` ([S-04](S-04-fila-de-aprovacao.md)), `reservar_chassi`
@@ -117,11 +115,17 @@ Todas são **somente leitura**, exceto as três marcadas. Todas registram span
 | `detalhar_unidade` | Ficha completa de um chassi | `recomendacao`, `objecao` |
 | `comparar_unidades` | 2 ou 3 chassis lado a lado | `recomendacao`, `objecao` |
 | `calcular_custo_km` | Custo por km com a tarifa de energia da PB | `objecao` |
-| `buscar_conhecimento` | Busca semântica em objeções, garantia, carregamento (pgvector) | `qualificacao`, `recomendacao`, `objecao` |
+| `buscar_conhecimento` | Busca por palavra-chave e sinônimos curados em objeções, garantia, carregamento e rota | `qualificacao`, `recomendacao`, `objecao` |
 | `solicitar_aprovacao` | ✏️ cria pedido de aprovação e **para o fluxo** | `condicao` |
 | `reservar_chassi` | ✏️ reserva, exige `approval_id` válido | `reserva` |
 | `consultar_agenda` / `agendar_test_drive` | ✏️ agenda | `test_drive` |
 | `transferir_para_humano` | ✏️ muda `modo` para `humano` | todas exceto `humano`, `encerrada` |
+
+A tabela `itens_de_conhecimento` ([ADR-002](../adr/ADR-002-pgvector-em-vez-de-qdrant.md)) já tem
+coluna `embedding vector(1536)`, mas ela fica `NULL`: com 9 tópicos curados e `palavras_chave`
+escritas à mão, o score por palavra-chave resolve os 6 casos de eval sem chamada de rede por
+busca. Virar embedding de verdade é decisão consciente do Raí — implica chamada de rede faturada
+a cada busca do cliente e mexer no contrato hoje síncrono de execução de tools (`app/ia/turno.py`).
 
 **Tools que não existem, e a ausência é a garantia** ([ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md)):
 `aplicar_desconto`, `alterar_preco`, `criar_condicao_especial`, `cancelar_reserva_de_outro`.

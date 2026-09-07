@@ -64,6 +64,7 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db import Base, engine  # noqa: E402
 from app.ia.provedor import ProvedorCompativel  # noqa: E402
+from app.ia.tools.conhecimento import ITENS_CONHECIMENTO  # noqa: E402
 from app.ia.turno import Evento, executar_turno  # noqa: E402
 
 # A régua é a mesma do turno, de propósito. `_confere` conhece a tolerância da §4 —
@@ -71,7 +72,7 @@ from app.ia.turno import Evento, executar_turno  # noqa: E402
 # aqui reprovaria "mais de 240 mil" para 249.990, que o código permite de caso pensado.
 from app.ia.verificacao import _confere, _sem_acento, extrair  # noqa: E402
 from app.leads import LeadEntrada, abrir_conversa  # noqa: E402
-from app.modelos import Conversa, Mensagem, Unidade  # noqa: E402
+from app.modelos import Conversa, ItemConhecimento, Mensagem, Unidade  # noqa: E402
 from app.observabilidade import MENSAGEM_NO_TETO  # noqa: E402
 
 CASOS = Path(__file__).parent / "casos"
@@ -162,6 +163,7 @@ def _telefone(indice: int) -> str:
 def preparar(sessao: Session) -> None:
     with engine.begin() as conexao:
         conexao.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
+        conexao.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(engine)
     for tabela in reversed(Base.metadata.sorted_tables):
         sessao.execute(tabela.delete())
@@ -171,6 +173,11 @@ def preparar(sessao: Session) -> None:
         sessao.execute(
             insert(Unidade).values(linhas).on_conflict_do_nothing(index_elements=["chassi"])
         )
+    sessao.execute(
+        insert(ItemConhecimento)
+        .values(ITENS_CONHECIMENTO)
+        .on_conflict_do_nothing(index_elements=["topico"])
+    )
     sessao.commit()
 
 

@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -158,9 +159,7 @@ class Mensagem(Base):
     __tablename__ = "mensagens"
     __table_args__ = (
         CheckConstraint("direcao IN ('entrada', 'saida')", name="ck_mensagens_direcao"),
-        CheckConstraint(
-            "autor IN ('cliente', 'aurora', 'vendedor')", name="ck_mensagens_autor"
-        ),
+        CheckConstraint("autor IN ('cliente', 'aurora', 'vendedor')", name="ck_mensagens_autor"),
         CheckConstraint("canal IN ('web', 'whatsapp')", name="ck_mensagens_canal"),
         # A fila de turnos da S-02 §4 é esta tabela: só o que entrou pode estar pendente.
         CheckConstraint(
@@ -192,9 +191,7 @@ class Mensagem(Base):
     criada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
     # ponytail: a fila de turnos é esta coluna, não um broker. Vira fila de verdade
     # quando houver mais de um worker consumindo a mesma conversa.
-    processada_em: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), default=None
-    )
+    processada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
 
 class Vendedor(Base):
@@ -374,9 +371,7 @@ class Usuario(Base):
 
     __tablename__ = "usuarios"
     __table_args__ = (
-        CheckConstraint(
-            "perfil IN ('dono', 'gerente', 'vendedor')", name="ck_usuarios_perfil"
-        ),
+        CheckConstraint("perfil IN ('dono', 'gerente', 'vendedor')", name="ck_usuarios_perfil"),
         # O vendedor é o único perfil que atende lead, e o recorte da S-11 §5 depende deste
         # vínculo existir. Deixar a regra em Python permitiria um vendedor sem vendedor_id,
         # e o `WHERE vendedor_id = :usuario` devolveria a lista vazia em silêncio.
@@ -402,9 +397,7 @@ class Usuario(Base):
     # a retenção da S-09 §6 esquece de apagar. Nulo para quem não quer receber nada.
     telefone_cifrado: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
     tentativas_falhas: Mapped[int] = mapped_column(Integer, default=0)
-    bloqueado_ate: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), default=None
-    )
+    bloqueado_ate: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     # Token emitido antes deste instante é recusado. É a revogação inteira, em uma coluna
     # — e ela é por usuário, não por dispositivo (S-11 §2, consequência aceita).
     sessoes_validas_apos: Mapped[datetime | None] = mapped_column(
@@ -528,9 +521,7 @@ class Reserva(Base):
 
     __tablename__ = "reservas"
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('ativa', 'liberada', 'concluida')", name="ck_reservas_status"
-        ),
+        CheckConstraint("status IN ('ativa', 'liberada', 'concluida')", name="ck_reservas_status"),
         # S-05 §4 — no máximo 2 renovações, de 72h cada.
         CheckConstraint("renovacoes BETWEEN 0 AND 2", name="ck_reservas_renovacoes"),
         CheckConstraint("expira_em > criada_em", name="ck_reservas_prazo_positivo"),
@@ -633,3 +624,36 @@ class TokenMigracao(Base):
     def __repr__(self) -> str:
         """Sem o token: ele é credencial de sessão enquanto não for usado."""
         return f"<TokenMigracao conversa={self.conversa_id} usado={self.usado_em is not None}>"
+
+
+CATEGORIAS_CONHECIMENTO = ("objecao", "garantia", "carregamento", "rota", "manutencao")
+
+
+class ItemConhecimento(Base):
+    """S-03 §2, S-10 §4 e ADR-002 — a base de conhecimento com pgvector."""
+
+    __tablename__ = "itens_de_conhecimento"
+    __table_args__ = (
+        CheckConstraint(
+            f"categoria IN {CATEGORIAS_CONHECIMENTO}",
+            name="ck_itens_conhecimento_categoria",
+        ),
+        Index("ux_itens_conhecimento_topico", "topico", unique=True),
+        Index("ix_itens_conhecimento_categoria", "categoria"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    topico: Mapped[str] = mapped_column(String(60), unique=True)
+    categoria: Mapped[str] = mapped_column(String(40))
+    titulo: Mapped[str] = mapped_column(String(140))
+    conteudo: Mapped[str] = mapped_column(Text)
+    palavras_chave: Mapped[str] = mapped_column(Text)
+    # ponytail: fica NULL — busca hoje é score por palavra-chave (app/ia/tools/conhecimento.py).
+    # Preenche e vira busca por similaridade quando o corpus crescer além do que sinônimo
+    # escrito à mão aguenta, ou quando o eval de objeção pedir o que o score não cobre.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    def __repr__(self) -> str:
+        return f"<ItemConhecimento {self.topico} ({self.categoria})>"

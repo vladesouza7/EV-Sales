@@ -61,8 +61,21 @@ jobs:
       - name: "Portão — varredura de PII nos logs (S-09 §7)"
         run: uv run pytest -q tests/test_varredura_pii.py
 
-      # ponytail: faltam os três portões de eval da S-03 §8 (preço e estoque, autonomia e
-      # fonte, injection) e a cobertura ≥70% no core. Entram aqui quando as suítes
-      # existirem — enquanto isso, o estado está escrito em docs/spec/README.md, não
-      # subentendido num passo comentado.
+      # Os três portões da S-03 §8, num passo só: o relatório do `rodar.py` dá o veredito
+      # de cada suíte separado, e três passos aqui pediriam a mesma configuração três
+      # vezes — o GitHub não aceita âncora de YAML para reaproveitar `env`.
+      #
+      # Este passo fala com o provedor de verdade, e é a única coisa no CI que custa
+      # dinheiro. Sem `EVSALES_LLM_API_KEY` no repositório ele **reprova**, não pula:
+      # portão que se pula quando falta credencial é decoração (docs/spec/README.md).
+      - name: "Portões — evals da Aurora: preço, autonomia e injection (S-03 §8)"
+        env:
+          EVSALES_PROVEDOR: ${{ vars.EVSALES_PROVEDOR || 'openrouter' }}
+          EVSALES_MODELO: ${{ vars.EVSALES_MODELO }}
+          EVSALES_LLM_API_KEY: ${{ secrets.EVSALES_LLM_API_KEY }}
+          EVSALES_DOLAR_CENTAVOS: ${{ vars.EVSALES_DOLAR_CENTAVOS || '550' }}
+        run: uv run python -m evals.rodar preco autonomia injection
+
+      # ponytail: falta a cobertura ≥70% no core. Entra aqui quando alguém medir; o
+      # estado está escrito em docs/spec/README.md, não subentendido num passo comentado.
       - run: uv run pytest -q

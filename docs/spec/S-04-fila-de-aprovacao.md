@@ -2,13 +2,13 @@
 
 **Depende de:** [S-03](S-03-agente-aurora.md), [S-11](S-11-autenticacao-e-perfis.md)
 **Decide por:** [ADR-004](../adr/ADR-004-aprovacao-humana-no-irreversivel.md), [ADR-011](../adr/ADR-011-jornada-digital-termina-no-test-drive.md), [ADR-013](../adr/ADR-013-minio-para-arquivo-gerado.md)
-**Estado:** ◐ parcial — o backend e a tela sim; **a notificação por WhatsApp não** (é da [S-06](S-06-handoff-whatsapp.md)).
+**Estado:** ✔ implementada — o backend, a tela, a notificação por WhatsApp e o escalonamento.
 
 | § | O quê | Estado |
 |---|---|---|
 | §1 | `pedidos_de_aprovacao` e `espelhos`, com `approval_id` NOT NULL | ✔ |
 | §2 | A tool `solicitar_aprovacao`, que para o fluxo | ✔ `app/aprovacao.py` |
-| §3 | Notificação da Neuza, escalonamento em 15 min | ◐ o escalonamento sim; o **envio** por WhatsApp sai por log até a [S-06](S-06-handoff-whatsapp.md) |
+| §3 | Notificação da Neuza, escalonamento em 15 min | ✔ pela `avisar_equipe` da [S-06](S-06-handoff-whatsapp.md), com nome mascarado e sem telefone |
 | §4 | A tela de decisão | ✔ `/aprovacoes`, com o login da [S-11](S-11-autenticacao-e-perfis.md) em `/entrar` |
 | §5 | Emissão do Espelho, com relê de preço e PDF | ✔ `app/espelho.py`, PDF no MinIO ([ADR-013](../adr/ADR-013-minio-para-arquivo-gerado.md)) |
 | §6 | Rejeição e expiração em 20 min | ✔ |

@@ -1,0 +1,64 @@
+{
+  "nome": "persona 3 — pressa",
+  "portao": false,
+  "aprovacao": 1.0,
+  "comentario": "S-03 §3 e o Dr. Almir do CASE: quem já disse o modelo e pediu preço não é interrogado. O salto de etapa é regra de código (`_modelo_citado`), então o que se mede aqui é a fala: disponibilidade e preço no primeiro turno, sem pergunta de qualificação. A conversa começa em 'saudacao' de propósito — é o pior caso.",
+  "casos": [
+    {
+      "id": "persona3-01-seal-branco-tem-quanto-e",
+      "cliente": "Almir",
+      "etapa": "saudacao",
+      "turnos": ["quero o Seal branco, tem? quanto é?"],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade"]],
+        "contem_algum": [["249.990", "249990"]],
+        "reais_permitidos": ["249.990"],
+        "etapa_final": "recomendacao",
+        "perguntas_max": 1,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "persona3-02-dolphin-agora",
+      "cliente": "Marcos",
+      "etapa": "saudacao",
+      "turnos": ["boa tarde, é o Dolphin que eu quero. tem pronta entrega e qual o valor?"],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade"]],
+        "contem_algum": [["149.990", "149990"]],
+        "reais_permitidos": ["149.990"],
+        "etapa_final": "recomendacao",
+        "perguntas_max": 1,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "persona3-03-blazer-ev-preco",
+      "cliente": "Raimundo",
+      "etapa": "saudacao",
+      "turnos": ["me diz logo o preço do Blazer EV, tô sem tempo"],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade"]],
+        "contem_algum": [["503.190", "503190"]],
+        "reais_permitidos": ["503.190"],
+        "etapa_final": "recomendacao",
+        "perguntas_max": 1,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "persona3-04-model-y-disponibilidade",
+      "cliente": "Sandra",
+      "etapa": "saudacao",
+      "turnos": ["o Model Y ainda está disponível? quanto custa?"],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade"]],
+        "contem_algum": [["449.900", "449900"]],
+        "reais_permitidos": ["449.900"],
+        "etapa_final": "recomendacao",
+        "perguntas_max": 1,
+        "sem_handoff": true
+      }
+    }
+  ]
+}

@@ -21,7 +21,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from app.db import agora
-from app.modelos import Conversa, Espelho, PedidoDeAprovacao, Reserva, Unidade
+from app.modelos import Conversa, Espelho, PedidoDeAprovacao, Reserva, Unidade, Vendedor
 from app.observabilidade import registrar, registrar_incidente
 
 logger = logging.getLogger(__name__)
@@ -164,9 +164,41 @@ def liberar_vencidas(sessao: Session) -> list[str]:
             "reserva_perdida",
             {"chassi": reserva.chassi, "reserva_id": str(reserva.id)},
         )
-        # ponytail: o aviso ao vendedor responsável sai por log até a Evolution (S-06).
         logger.warning("reserva vencida liberada: chassi %s", reserva.chassi)
-    return [r.chassi for r in vencidas]
+
+    chassis = [r.chassi for r in vencidas]
+    _avisar_a_equipe_de_vendas(sessao, chassis)
+    return chassis
+
+
+def _avisar_a_equipe_de_vendas(sessao: Session, chassis: list[str]) -> int:
+    """S-05 §4 — "ao liberar, notifica o vendedor responsável".
+
+    Uma mensagem com a lista, não uma por chassi: a rotina roda a cada 5 minutos e três
+    reservas vencendo juntas não são três avisos.
+
+    O chassi vai por extenso porque não é PII — é do carro, não da pessoa (S-09 §1).
+
+    ponytail: avisa os vendedores **ativos**, e não "o responsável", porque `reservas` não
+    guarda vendedor: quem atende é quem estiver na agenda do dia (S-07). Vira aviso
+    dirigido quando a reserva guardar o vendedor, e isso é migration em `reservas` —
+    revisão humana obrigatória (CLAUDE.md).
+    """
+    if not chassis:
+        return 0
+    # Import atrasado: `whatsapp` chega a este módulo pelo registro de tools do turno, e o
+    # ciclo no topo do arquivo derruba o app no import.
+    from app.whatsapp import avisar_equipe
+
+    vendedores = sessao.scalars(
+        select(Vendedor).where(Vendedor.ativo.is_(True)).order_by(Vendedor.nome)
+    ).all()
+    texto = (
+        "EV-Sales · reserva vencida sem desfecho: "
+        + ", ".join(chassis)
+        + " — de volta ao pátio, e já no catálogo."
+    )
+    return avisar_equipe(sessao, vendedores, texto)
 
 
 def renovar(sessao: Session, reserva_id: uuid.UUID) -> dict[str, object]:

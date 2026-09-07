@@ -16,6 +16,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core import dinheiro
 from app.core.pii import redigir
 from app.db import agora
 from app.modelos import Incidente, Trilha
@@ -51,6 +52,32 @@ GRAVIDADE: dict[str, str] = {
     # O alerta de 80% da §3. Não está na tabela da §6 porque lá só entrou o que já
     # aconteceu; este é o aviso de que vai acontecer, e o Raí quer os dois.
     "custo_perto_do_teto": "alta",
+}
+
+# S-08 §6, coluna "Ação": "alerta imediato" é exatamente a gravidade crítica, então a
+# regra é derivada dela e não de uma segunda lista — tipo crítico novo já entra avisando.
+# O `custo_perto_do_teto` é a exceção nomeada: é `alta`, e a §3 manda o WhatsApp de todo
+# jeito, porque o aviso de 80% só serve antes de o teto cortar.
+AVISAR_ALEM_DA_CRITICA = frozenset({"custo_perto_do_teto"})
+
+# Avisar pelo WhatsApp que o WhatsApp caiu não chega ao Raí, e chama a si mesmo: o aviso
+# falha, o fracasso registra outro `evolution_desconectada`, e a pilha acaba. Este
+# incidente se lê no log e na tela de saúde (§7), que é onde ele tem de estar.
+SEM_AVISO_POR_WHATSAPP = frozenset({"evolution_desconectada"})
+
+ALERTA_PADRAO = "EV-Sales · incidente {gravidade}: {tipo}. Confira em /atendimentos."
+ALERTA = {
+    "teto_atingido": (
+        "EV-Sales · o teto de custo do mês foi atingido ({gasto} de {teto}). A Aurora "
+        "parou de responder e as conversas novas vão para a fila humana."
+    ),
+    "custo_perto_do_teto": (
+        "EV-Sales · o custo do mês chegou a {gasto}, mais de 80% do teto de {teto}."
+    ),
+    "chassi_divergente": (
+        "EV-Sales · a Aurora citou um chassi que não veio de consulta. A conversa foi "
+        "para atendimento humano — confira em /atendimentos."
+    ),
 }
 
 
@@ -109,10 +136,48 @@ def registrar_incidente(
     )
     sessao.add(incidente)
     sessao.commit()
-    # ponytail: o alerta de gravidade crítica sai por log até a Evolution API existir
-    # (S-06). O canal do Raí é o WhatsApp, e é lá que ele precisa chegar.
     logger.warning("incidente %s (%s) conversa=%s", tipo, incidente.gravidade, conversa_id)
+    alertar(sessao, incidente)
     return incidente
+
+
+def alertar(sessao: Session, incidente: Incidente) -> int:
+    """S-08 §3 e §6 — o "alerta imediato", no canal onde o Raí está: o WhatsApp.
+
+    Mora aqui, e não em cada chamador, porque todo incidente passa por
+    `registrar_incidente`: são cinco chamadores hoje e um guarda no lugar por onde todos
+    passam é menor que cinco guardas iguais — e não esquece o sexto.
+
+    A dedução do "para quem" também é única: quem tem perfil `dono` e telefone cadastrado
+    na tela da S-12. Uma lista de destinatários à parte divergiria de `usuarios` no
+    primeiro mês.
+    """
+    if incidente.tipo in SEM_AVISO_POR_WHATSAPP:
+        return 0
+    if incidente.gravidade != "critica" and incidente.tipo not in AVISAR_ALEM_DA_CRITICA:
+        return 0
+
+    # Import atrasado: `whatsapp` importa este módulo — a Evolution registra incidente
+    # quando falha —, e o ciclo no topo do arquivo derruba o app no import. É o mesmo
+    # jeito que a `aprovacao.py` já usa para a notificação da S-04 §3.
+    from app.whatsapp import avisar_equipe, quem_recebe
+
+    return avisar_equipe(sessao, quem_recebe(sessao, "dono"), _texto_do_alerta(incidente))
+
+
+def _texto_do_alerta(incidente: Incidente) -> str:
+    """Sem PII: `dados` já entrou mascarado, e o que sai daqui é tipo, valor e o que fazer.
+
+    O nome do lead não entra nem mascarado — um alerta é lido no semáforo, e o que o Raí
+    precisa saber é o que parou e onde olhar.
+    """
+    gasto = incidente.dados.get("gasto_micro_reais") if incidente.dados else None
+    return ALERTA.get(incidente.tipo, ALERTA_PADRAO).format(
+        tipo=incidente.tipo,
+        gravidade=incidente.gravidade,
+        gasto=dinheiro.formatar(int(gasto) // 10_000) if isinstance(gasto, int) else "—",
+        teto=dinheiro.formatar(TETO_MICRO_REAIS // 10_000),
+    )
 
 
 def _ja_houve(

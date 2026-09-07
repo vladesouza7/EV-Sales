@@ -444,3 +444,98 @@ def test_a_notificacao_da_neuza_nao_leva_telefone_nem_nome_inteiro(
     assert "Nóbrega" not in corpo
     assert "988714471" not in corpo
     assert "249.990" in corpo
+
+
+# ── os dois avisos que a S-06 destravou ──────────────────────────────────────────
+
+
+def _rai_com_telefone(sessao: Session) -> Usuario:
+    """O  cria o Raí sem telefone: quem não cadastrou não recebe."""
+    rai = sessao.scalars(select(Usuario).where(Usuario.perfil == "dono")).one()
+    rai.telefone_cifrado = cifrar(TELEFONE)
+    sessao.commit()
+    return rai
+
+
+def test_incidente_critico_alerta_o_dono_no_whatsapp(
+    sessao: Session, configurado: None, enviados: list[dict[str, object]]
+) -> None:
+    """S-08 §6 — "alerta imediato" é a gravidade crítica, e o canal do Raí é o WhatsApp."""
+    from app.observabilidade import registrar_incidente
+
+    _rai_com_telefone(sessao)
+
+    registrar_incidente(sessao, None, "teto_atingido", {"gasto_micro_reais": 901_000_000})
+
+    assert len(enviados) == 1
+    corpo = str(enviados[0]["corpo"])
+    assert "teto de custo" in corpo
+    assert "R$ 901,00" in corpo and "R$ 900,00" in corpo
+
+
+def test_incidente_de_gravidade_alta_nao_acorda_ninguem(
+    sessao: Session, configurado: None, enviados: list[dict[str, object]]
+) -> None:
+    """ é alta e vira revisão da semana, não mensagem de madrugada."""
+    from app.observabilidade import registrar_incidente
+
+    _rai_com_telefone(sessao)
+
+    registrar_incidente(sessao, None, "numero_divergente", {"divergentes": ["400 km"]})
+
+    assert enviados == []
+
+
+def test_o_alerta_de_oitenta_por_cento_sai_mesmo_sendo_alta(
+    sessao: Session, configurado: None, enviados: list[dict[str, object]]
+) -> None:
+    """S-08 §3 — a exceção nomeada: aviso de 80% só serve **antes** de o teto cortar."""
+    from app.observabilidade import registrar_incidente
+
+    _rai_com_telefone(sessao)
+
+    registrar_incidente(sessao, None, "custo_perto_do_teto", {"gasto_micro_reais": 720_000_000})
+
+    assert len(enviados) == 1
+    assert "80%" in str(enviados[0]["corpo"])
+
+
+def test_whatsapp_caido_nao_se_avisa_pelo_whatsapp(
+    sessao: Session, configurado: None, enviados: list[dict[str, object]]
+) -> None:
+    """ é crítica e **não** alerta: o aviso falharia, o fracasso
+    registraria outro incidente igual, e a pilha acabaria. Ele se lê no log e na saúde."""
+    from app.observabilidade import registrar_incidente
+
+    _rai_com_telefone(sessao)
+
+    registrar_incidente(sessao, None, "evolution_desconectada", {"etapa": "envio"})
+
+    assert enviados == []
+
+
+def test_reserva_vencida_avisa_a_equipe_de_vendas_uma_vez(
+    sessao: Session, configurado: None, enviados: list[dict[str, object]]
+) -> None:
+    """S-05 §4 — ao liberar, notifica. Três chassis numa rodada não são três mensagens."""
+    from app.modelos import Vendedor
+    from app.reserva import _avisar_a_equipe_de_vendas
+
+    sessao.add(Vendedor(nome="Tarcísio", telefone_cifrado=cifrar(TELEFONE), ativo=True))
+    sessao.add(Vendedor(nome="Fora de férias", telefone_cifrado=cifrar(TELEFONE), ativo=False))
+    sessao.commit()
+
+    assert _avisar_a_equipe_de_vendas(sessao, ["CHASSI-1", "CHASSI-2"]) == 1
+    assert len(enviados) == 1
+    corpo = str(enviados[0]["corpo"])
+    assert "CHASSI-1" in corpo and "CHASSI-2" in corpo
+
+
+def test_rodada_sem_reserva_vencida_nao_manda_nada(
+    sessao: Session, configurado: None, enviados: list[dict[str, object]]
+) -> None:
+    """A rotina roda a cada 5 minutos. Silêncio é a resposta certa 287 vezes por dia."""
+    from app.reserva import _avisar_a_equipe_de_vendas
+
+    assert _avisar_a_equipe_de_vendas(sessao, []) == 0
+    assert enviados == []

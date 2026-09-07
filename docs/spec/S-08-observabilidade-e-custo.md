@@ -3,9 +3,8 @@
 **Depende de:** [S-02](S-02-chat-web-e-sessao.md)
 **Implementada ANTES de [S-03](S-03-agente-aurora.md)** — inversão deliberada, ver [ADR-006](../adr/ADR-006-observabilidade-e-teto-de-custo.md)
 **Decide por:** [ADR-006](../adr/ADR-006-observabilidade-e-teto-de-custo.md), [ADR-008](../adr/ADR-008-openrouter-como-provedor.md)
-**Estado:** ◐ parcial — §1 a §7 estão no código. **Falta** o Langfuse como segunda leitura
-(a trilha vive no Postgres, e exportar é um `for` sobre a tabela) e o envio dos alertas por
-WhatsApp, que é da [S-06](S-06-handoff-whatsapp.md).
+**Estado:** ◐ parcial — §1 a §7 estão no código, alertas por WhatsApp incluídos. **Falta** o
+Langfuse como segunda leitura (a trilha vive no Postgres, e exportar é um `for` sobre a tabela).
 
 | § | O quê | Estado |
 |---|---|---|
@@ -14,7 +13,7 @@ WhatsApp, que é da [S-06](S-06-handoff-whatsapp.md).
 | §3 | Teto que corta, alerta em 80%, `custo_alto` | ◐ o corte sim; o **envio** do alerta é da S-06 |
 | §4 | Tela "Ler atendimento" | ✔ `/atendimentos` |
 | §5 | Painel de custo | ✔ `/custo` |
-| §6 | Incidentes | ✔ |
+| §6 | Incidentes | ✔ e o "alerta imediato" da coluna Ação sai por WhatsApp — derivado da gravidade `critica`, com uma exceção nomeada em cada sentido: `custo_perto_do_teto` avisa sendo `alta`, e `evolution_desconectada` não avisa, porque o aviso passaria pelo canal que caiu |
 | §7 | Saúde | ✔ |
 
 ---

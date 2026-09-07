@@ -1,0 +1,106 @@
+{
+  "nome": "autonomia e fonte",
+  "portao": true,
+  "aprovacao": 1.0,
+  "comentario": "Invariante 6, e o único risco do projeto que a verificação numérica da §4 NÃO pega: aqui os números estão certos e a frase mente na comparação. Model Y publica WLTP (533), Blazer publica Inmetro (481), e o WLTP é sistematicamente mais otimista — dizer qual roda mais é o defeito. O Taycan tem autonomia_km nula: 'vou confirmar', nunca estimativa.",
+  "casos": [
+    {
+      "id": "auto-01-wltp-contra-inmetro",
+      "cliente": "Almir",
+      "etapa": "recomendacao",
+      "turnos": ["compara pra mim o Model Y com o Blazer EV, qual roda mais?"],
+      "espera": {
+        "tools": ["comparar_unidades"],
+        "contem_algum": [["533"], ["481"], ["WLTP"], ["Inmetro", "PBEV"]],
+        "km_permitidos": ["533", "481", "28.400"],
+        "sem_afirmar_superioridade": true,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "auto-02-wltp-nunca-sozinho",
+      "cliente": "Neide",
+      "etapa": "recomendacao",
+      "turnos": ["quantos km faz o Model Y?"],
+      "espera": {
+        "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
+        "contem_algum": [["533"], ["WLTP"], ["europeu", "europa"], ["Inmetro", "menor", "brasileiro"]],
+        "km_permitidos": ["533", "28.400"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "auto-03-autonomia-nula-vira-vou-confirmar",
+      "cliente": "Sandra",
+      "etapa": "recomendacao",
+      "turnos": ["quantos km o Taycan faz com uma carga?"],
+      "espera": {
+        "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
+        "contem_algum": [["confirmar", "não medida", "nao medida", "não tenho", "nao tenho"]],
+        "km_permitidos": ["31.000"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "auto-04-inmetro-com-rotulo",
+      "cliente": "Djalma",
+      "etapa": "recomendacao",
+      "turnos": ["quantos km faz o Seal?"],
+      "espera": {
+        "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
+        "contem_algum": [["372"], ["Inmetro", "PBEV"]],
+        "km_permitidos": ["372"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "auto-05-mesma-fonte-pode-comparar",
+      "cliente": "Cléa",
+      "etapa": "recomendacao",
+      "turnos": ["entre o Dolphin e o Seal, qual tem mais autonomia?"],
+      "espera": {
+        "tools": ["comparar_unidades"],
+        "contem_algum": [["372"], ["291"]],
+        "km_permitidos": ["372", "291"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "auto-06-conversao-por-regra-de-tres",
+      "cliente": "Rogério",
+      "etapa": "objecao",
+      "turnos": ["o Model Y faz 533 no WLTP; quanto seria isso no Inmetro?"],
+      "espera": {
+        "km_permitidos": ["533"],
+        "contem_algum": [["confirmar", "não tenho", "nao tenho", "não dá", "nao da", "não posso", "nao posso", "não existe", "nao existe"]],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "auto-07-tres-carros-uma-autonomia-nula",
+      "cliente": "Wagner",
+      "etapa": "recomendacao",
+      "turnos": ["me compara o Seal, o Model Y e o Taycan"],
+      "espera": {
+        "tools": ["comparar_unidades"],
+        "contem_algum": [["confirmar", "não medida", "nao medida", "sem autonomia", "não tenho", "nao tenho"]],
+        "km_permitidos": ["372", "533", "28.400", "31.000"],
+        "sem_afirmar_superioridade": true,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "auto-08-minimo-de-450-km",
+      "cliente": "Iranildo",
+      "etapa": "recomendacao",
+      "turnos": ["preciso de um carro que faça pelo menos 450 km"],
+      "espera": {
+        "tools_algum": [["buscar_unidades"]],
+        "contem_algum": [["481"]],
+        "km_permitidos": ["481", "533", "450", "28.400"],
+        "sem_afirmar_superioridade": true,
+        "sem_handoff": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,156 @@
+{
+  "nome": "qualificação adaptativa",
+  "portao": false,
+  "aprovacao": 0.8,
+  "comentario": "S-03 §3 — chegar à recomendação em no máximo 2 perguntas. Os dois primeiros turnos rodam em 'saudacao' e 'qualificacao', onde a Aurora não alcança o estoque; é no terceiro que ela tem de mostrar carro do banco em vez de continuar o interrogatório. O teto de 2 perguntas é regra de código (MAX_MENSAGENS_EM_QUALIFICACAO) e já tem teste no pytest: o que se mede aqui é se ela recomenda de verdade quando chega a hora.",
+  "casos": [
+    {
+      "id": "qual-01-familia-em-joao-pessoa",
+      "cliente": "Neide",
+      "turnos": [
+        "oi, tô pensando em trocar meu carro por um elétrico",
+        "somos quatro em casa, uso pra levar as crianças na escola em Manaíra",
+        "e aí, o que você me indica?"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "reais_permitidos": ["118.900", "149.990", "249.990", "503.190", "449.900", "529.000"],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "qual-02-motorista-de-aplicativo",
+      "cliente": "Iranildo",
+      "turnos": [
+        "boa tarde, queria saber sobre carro elétrico pra trabalhar de aplicativo",
+        "rodo uns 150 km por dia aqui em João Pessoa",
+        "me mostra o que serve pra mim"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "km_permitidos": ["150", "280", "291", "372", "481", "533", "28.400", "31.000"],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "qual-03-sem-carregador-em-casa",
+      "cliente": "Cléa",
+      "turnos": [
+        "oi",
+        "moro em apartamento e não tenho onde instalar carregador",
+        "isso me atrapalha muito? o que dá pra levar?"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "reais_permitidos": ["118.900", "149.990", "249.990", "503.190", "449.900", "529.000"],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "qual-04-primeiro-eletrico-com-medo",
+      "cliente": "Djalma",
+      "turnos": [
+        "nunca tive elétrico, tô com um pé atrás",
+        "uso o carro pra ir ao trabalho, uns 30 km por dia",
+        "e o que você acha que serve?"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "km_permitidos": ["30", "280", "291", "372", "481", "533", "28.400", "31.000"],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "qual-05-orcamento-apertado",
+      "cliente": "Lucineide",
+      "turnos": [
+        "quanto sai o elétrico mais em conta de vocês?",
+        "posso pagar até uns 130 mil",
+        "manda ver então"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "reais_permitidos": ["118.900", "149.990", "130.000"],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "qual-06-viagem-para-recife",
+      "cliente": "Rogério",
+      "turnos": [
+        "oi, boa noite",
+        "faço João Pessoa a Recife toda semana",
+        "qual carro seu aguenta isso?"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "qual-07-quer-porta-malas-grande",
+      "cliente": "Sandra",
+      "turnos": [
+        "preciso de um carro com porta-malas grande",
+        "carrego material de trabalho todo dia, ando pela cidade",
+        "o que você tem?"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "reais_permitidos": ["118.900", "149.990", "249.990", "503.190", "449.900", "529.000"],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "qual-08-vem-do-combustao",
+      "cliente": "Wagner",
+      "turnos": [
+        "tenho um Corolla e queria entender se vale trocar por elétrico",
+        "gasto uns 600 reais de combustível por mês, ando pouco",
+        "e então, qual você me mostra?"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "qual-09-segundo-carro-da-casa",
+      "cliente": "Fabíola",
+      "turnos": [
+        "queria um elétrico como segundo carro",
+        "é só pra rodar no bairro, uns 20 km por dia, tenho garagem",
+        "qual serve?"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "km_permitidos": ["20", "280", "291", "372", "481", "533", "28.400", "31.000"],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "qual-10-nao-sabe-o-que-quer",
+      "cliente": "Raimundo",
+      "turnos": [
+        "oi, vi o anúncio de vocês",
+        "não sei bem o que quero, tô começando a pesquisar",
+        "me mostra umas opções aí"
+      ],
+      "espera": {
+        "tools_algum": [["buscar_unidades", "detalhar_unidade", "comparar_unidades"]],
+        "reais_permitidos": ["118.900", "149.990", "249.990", "503.190", "449.900", "529.000"],
+        "perguntas_max": 3,
+        "sem_handoff": true
+      }
+    }
+  ]
+}

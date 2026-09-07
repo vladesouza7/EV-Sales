@@ -32,7 +32,7 @@ S-06 e da S-04 — lembrete, dossiê e desfecho — não veio.
 
 ## As specs
 
-Estado em **6 de setembro de 2026**. "Parcial" sempre diz o que falta, no cabeçalho da própria
+Estado em **7 de setembro de 2026**. "Parcial" sempre diz o que falta, no cabeçalho da própria
 spec.
 
 A [S-11](S-11-autenticacao-e-perfis.md) nasceu depois das outras dez: três entregas exigiam
@@ -49,12 +49,12 @@ passam a existir.
 |---|---|---|---|---|
 | [S-01](S-01-landing-e-captura-de-lead.md) | Landing e captura de lead | Página, formulário, catálogo somente-leitura | ✔ pronta | |
 | [S-02](S-02-chat-web-e-sessao.md) | Chat web e sessão | Streaming, modelo de conversa, etapas | ✔ pronta | |
-| [S-03](S-03-agente-aurora.md) | A Aurora | Tools, qualificação, **verificação numérica** | ◐ parcial — agente, tools e verificação sim; evals e 2 tools não | ✅ preço · ✅ autonomia · ✅ injection |
-| [S-04](S-04-fila-de-aprovacao.md) | Fila de aprovação | A pausa, a tela da Neuza, o Espelho de Condição | ✔ pronta — fila, Espelho, tela, notificação e escalonamento | |
-| [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ✔ pronta — a operação, o portão e a rotina de 5 min | ✅ concorrência — **existe** |
+| [S-03](S-03-agente-aurora.md) | A Aurora | Tools, qualificação, **verificação numérica** | ◐ parcial — agente, tools, verificação e as 6 suítes de eval sim; 2 tools não | ✅ preço · ✅ autonomia · ✅ injection — **existem** |
+| [S-04](S-04-fila-de-aprovacao.md) | Fila de aprovação | A pausa, a tela da Neuza, o Espelho de Condição | ✔ pronta — fila, Espelho, tela, notificação por WhatsApp e escalonamento | |
+| [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ✔ pronta — a operação, o portão, a rotina de 5 min e o aviso à equipe | ✅ concorrência — **existe** |
 | [S-06](S-06-handoff-whatsapp.md) | Handoff WhatsApp | Token, webhook, continuidade | ◐ parcial — §1 a §7 sim; o backoff da §8 espera a fila do worker | |
 | [S-07](S-07-test-drive.md) | Test drive | Agenda real, dossiê do vendedor, **desfecho** | ◐ parcial — agenda sim; §6, §8 e §9 não | |
-| [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo, teto e as duas telas sim; Langfuse não | |
+| [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo, teto, alertas e as duas telas sim; Langfuse não | |
 | [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem, máscara e a varredura sim; retenção não | ✅ varredura de logs — **existe** |
 | [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose (4 dos 9 containers), seed e CI sim; backup e runbook não | |
 | [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ◐ parcial — login, sessão e perfis sim; as telas são da S-04 e da S-08 | |
@@ -64,18 +64,27 @@ Os cinco ✅ são os portões que **reprovam o build**. Eles existem porque risc
 automatizada é desejo, não requisito: enquanto o eval não bloqueia o merge, o ADR envelhece em
 silêncio dizendo que está tudo mitigado.
 
-**Dois dos cinco existem hoje**, e os dois foram aceitos do mesmo jeito — rodando contra um erro
-de propósito, porque portão que não reprova o código errado é decoração:
+**Os cinco existem hoje**, e todos foram aceitos do mesmo jeito — rodando contra um erro de
+propósito, porque portão que não reprova o código errado é decoração:
 
 - o teste de concorrência da [S-05](S-05-reserva-de-chassi.md), verificado contra uma versão
   deliberadamente quebrada da operação;
 - a varredura de PII da [S-09 §7](S-09-protecao-de-pii.md), que roda um atendimento com telefone e
   sobrenome sintéticos e procura os dois no log e na trilha — e cujo primeiro teste é um vazamento
-  proposital, para provar que ela pega.
+  proposital, para provar que ela pega;
+- os três evals da [S-03 §8](S-03-agente-aurora.md) (`backend/evals/`), cuja régua tem teste em
+  `tests/test_evals.py`: um preço inventado, um arredondamento para cima e um "roda mais que"
+  afirmado, todos reprovando. Rodar a suíte inteira apontada para uma porta fechada mostrou o
+  defeito que faltava — três casos de injection passavam sem o modelo ter falado, porque a frase
+  de degradação não contém percentual nenhum. Turno degradado hoje reprova.
 
-Os outros três dependem dos evals da [S-03](S-03-agente-aurora.md). O CI que executa os portões é
-entrega da [S-10 §7](S-10-operacao.md) e está em `.github/workflows/ci.yml`: `main` protegida, PR
-obrigatório, e um portão vermelho bloqueia o merge de verdade.
+**Falta um segredo, não código.** O passo do eval no CI fala com o provedor de verdade: sem
+`EVSALES_LLM_API_KEY` configurado no repositório ele reprova, de propósito. É o único portão que
+custa dinheiro por execução.
+
+O CI que executa os portões é entrega da [S-10 §7](S-10-operacao.md) e está em
+`.github/workflows/ci.yml`: `main` protegida, PR obrigatório, e um portão vermelho bloqueia o
+merge de verdade.
 
 ## Como uma spec vira código neste repositório
 

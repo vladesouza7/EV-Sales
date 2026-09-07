@@ -1,0 +1,153 @@
+{
+  "nome": "preço e estoque",
+  "portao": true,
+  "aprovacao": 1.0,
+  "comentario": "S-03 §8. Todo valor esperado aqui é o do scripts/seed.py, e 'reais_permitidos' é a lista fechada do que pode sair na fala: qualquer outro número em reais é número que o modelo produziu, e nenhum caso desta suíte pode falhar.",
+  "casos": [
+    {
+      "id": "preco-01-seal-branco",
+      "cliente": "Almir",
+      "etapa": "recomendacao",
+      "turnos": ["quanto custa o Seal branco?"],
+      "espera": {
+        "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
+        "contem_algum": [["249.990", "249990"]],
+        "reais_permitidos": ["249.990"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-02-mais-barato",
+      "cliente": "Neide",
+      "etapa": "recomendacao",
+      "turnos": ["qual o carro mais barato que vocês têm?"],
+      "espera": {
+        "tools_algum": [["buscar_unidades"]],
+        "contem_algum": [["118.900", "118900"]],
+        "reais_permitidos": ["118.900", "149.990", "249.990", "503.190", "449.900", "529.000"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-03-teto-de-150-mil",
+      "cliente": "Rogério",
+      "etapa": "recomendacao",
+      "turnos": ["tem alguma coisa até 150 mil?"],
+      "espera": {
+        "tools_algum": [["buscar_unidades"]],
+        "contem_algum": [["149.990", "149990"]],
+        "reais_permitidos": ["118.900", "149.990", "150.000"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-04-blazer",
+      "cliente": "Cléa",
+      "etapa": "recomendacao",
+      "turnos": ["quanto custa o Blazer EV?"],
+      "espera": {
+        "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
+        "contem_algum": [["503.190", "503190"]],
+        "reais_permitidos": ["503.190"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-05-seminovo-em-dois-turnos",
+      "cliente": "Iranildo",
+      "etapa": "recomendacao",
+      "turnos": ["tô olhando seminovo", "e o Model Y, quanto sai?"],
+      "espera": {
+        "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
+        "contem_algum": [["449.900", "449900"]],
+        "reais_permitidos": ["449.900", "529.000"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-06-taycan",
+      "cliente": "Sandra",
+      "etapa": "recomendacao",
+      "turnos": ["quanto tá o Taycan?"],
+      "espera": {
+        "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
+        "contem_algum": [["529.000", "529000"]],
+        "reais_permitidos": ["529.000"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-07-dois-seal-mesmo-preco",
+      "cliente": "Djalma",
+      "etapa": "recomendacao",
+      "turnos": ["o Seal cinza custa mais que o branco?"],
+      "espera": {
+        "tools_algum": [["comparar_unidades", "buscar_unidades", "detalhar_unidade"]],
+        "contem_algum": [["249.990", "249990"]],
+        "reais_permitidos": ["249.990"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-08-chassi-vendido-nao-tem-preco",
+      "cliente": "Wagner",
+      "etapa": "recomendacao",
+      "turnos": ["vocês ainda têm o Dolphin Mini prata, chassi 9BWZZZ377VT100008?"],
+      "espera": {
+        "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
+        "nao_contem": ["97.900", "97900"],
+        "reais_permitidos": ["118.900", "149.990", "249.990", "503.190", "449.900", "529.000"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-09-premissa-falsa-do-cliente",
+      "cliente": "Fabíola",
+      "etapa": "recomendacao",
+      "turnos": ["o Dolphin custa 90 mil, né?"],
+      "espera": {
+        "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
+        "contem_algum": [["149.990", "149990"]],
+        "nao_contem": ["90 mil", "90.000", "90000"],
+        "reais_permitidos": ["149.990"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-10-tesla-zero-nao-existe",
+      "cliente": "Marcos",
+      "etapa": "recomendacao",
+      "turnos": ["quero um Tesla zero km"],
+      "espera": {
+        "tools_algum": [["buscar_unidades"]],
+        "contem_algum": [["seminovo", "semi-novo", "usado", "2024"]],
+        "reais_permitidos": ["118.900", "149.990", "249.990", "503.190", "449.900", "529.000"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-11-orcamento-de-120-mil",
+      "cliente": "Lucineide",
+      "etapa": "recomendacao",
+      "turnos": ["meu limite é 120 mil, o que dá pra levar?"],
+      "espera": {
+        "tools_algum": [["buscar_unidades"]],
+        "contem_algum": [["118.900", "118900"]],
+        "reais_permitidos": ["118.900", "120.000"],
+        "sem_handoff": true
+      }
+    },
+    {
+      "id": "preco-12-mais-caro-da-loja",
+      "cliente": "Raimundo",
+      "etapa": "recomendacao",
+      "turnos": ["qual o carro mais caro que vocês têm hoje?"],
+      "espera": {
+        "tools_algum": [["buscar_unidades"]],
+        "contem_algum": [["529.000", "529000"]],
+        "reais_permitidos": ["118.900", "149.990", "249.990", "503.190", "449.900", "529.000"],
+        "sem_handoff": true
+      }
+    }
+  ]
+}

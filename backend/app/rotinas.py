@@ -26,20 +26,26 @@ from sqlalchemy.orm import Session
 from app.aprovacao import escalar_pendentes
 from app.db import Sessao
 from app.reserva import liberar_vencidas
-from app.testdrive import cobrar_desfechos
+from app.testdrive import cobrar_desfechos, enviar_lembretes
 
 logger = logging.getLogger(__name__)
 
 INTERVALO_S = 300  # S-05 §4 — "rotina a cada 5 min"
 
 
-def ciclo(sessao: Session) -> tuple[int, int, int]:
+def ciclo(sessao: Session) -> dict[str, int]:
     """Uma passada. Separada do laço porque é o que a suíte consegue chamar — testar
-    `while True: await sleep(300)` seria testar o `asyncio`, não a regra."""
-    liberadas = liberar_vencidas(sessao)
-    escalados = escalar_pendentes(sessao)
-    cobrados = cobrar_desfechos(sessao)
-    return len(liberadas), escalados, cobrados
+    `while True: await sleep(300)` seria testar o `asyncio`, não a regra.
+
+    Devolve um mapa e não uma tupla: cada tarefa nova aqui reescrevia a assinatura e o
+    desempacotamento de quem chama, e o quarto `_` de uma tupla não diz nada.
+    """
+    return {
+        "reservas_liberadas": len(liberar_vencidas(sessao)),
+        "aprovacoes_escaladas": escalar_pendentes(sessao),
+        "lembretes": enviar_lembretes(sessao),
+        "desfechos_cobrados": cobrar_desfechos(sessao),
+    }
 
 
 async def _girar() -> None:
@@ -47,14 +53,11 @@ async def _girar() -> None:
         await asyncio.sleep(INTERVALO_S)
         try:
             with Sessao() as sessao:
-                liberadas, escalados, cobrados = ciclo(sessao)
-            if liberadas or escalados or cobrados:
+                feito = ciclo(sessao)
+            if any(feito.values()):
                 logger.info(
-                    "rotina: %d reserva(s) liberada(s), %d aprovação(ões) escalada(s), "
-                    "%d desfecho(s) cobrado(s)",
-                    liberadas,
-                    escalados,
-                    cobrados,
+                    "rotina: %s",
+                    ", ".join(f"{tarefa}={total}" for tarefa, total in feito.items() if total),
                 )
         except Exception:
             # Uma falha não pode matar o laço: sem ele, reserva vencida nunca mais é

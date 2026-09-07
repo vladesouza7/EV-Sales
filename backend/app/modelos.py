@@ -279,6 +279,9 @@ class TestDrive(Base):
     status: Mapped[str] = mapped_column(String(16), default="agendado")
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
     confirmado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # S-07 §6 — o lembrete é único, e a rotina roda a cada 5 minutos. Carimbado nos dois
+    # casos: mensagem enviada, ou tarefa de ligação criada porque a janela fechou.
+    lembrete_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     # S-07 §9 — o desfecho, e quem o marcou. O CHECK acima obriga os três juntos: desfecho
     # sem autor e sem hora não é registro, é palpite, e é dele que sai `unidades.vendido`.
     compareceu: Mapped[bool | None] = mapped_column(Boolean, default=None)

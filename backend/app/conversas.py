@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.agenda import confirmar_se_o_cliente_respondeu
 from app.db import FUSO, Sessao, agora, obter_sessao
 from app.ia.turno import executar_turno
 from app.limite import dentro_do_limite
@@ -126,6 +127,10 @@ def enviar(
         )
     )
     conversa.ultima_mensagem_em = agora()
+    # S-07 §6 — "resposta afirmativa → confirmado". Aqui e na recepção do WhatsApp: são os
+    # dois lugares por onde uma fala do cliente entra, e o lembrete pode ter saído por um
+    # canal e a resposta chegar pelo outro.
+    confirmar_se_o_cliente_respondeu(sessao, conversa, conteudo)
     sessao.flush()
     if _turnos(sessao, conversa.id) >= TURNOS_MAXIMOS:
         # S-02 §4 — passou de 60 turnos, a Aurora sai e um vendedor assume.

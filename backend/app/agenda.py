@@ -16,6 +16,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import FUSO, agora
+
+# `_sem_acento` é o normalizador do turno, e é puro (só `re` e `unicodedata`). Uma segunda
+# cópia dele aqui divergiria na primeira letra acentuada que alguém esquecesse.
+from app.ia.verificacao import _sem_acento
 from app.modelos import AgendaBloqueio, Conversa, TestDrive, Unidade, Vendedor
 
 DURACAO = timedelta(minutes=45)
@@ -221,3 +225,53 @@ def agendar(
     conversa.desfecho = "test_drive_agendado"
     sessao.commit()
     return test_drive
+
+
+# S-07 §6 — "resposta afirmativa → confirmado". Palavra, não modelo: o cliente responde
+# "sim" às 22h, e nessa hora a conversa pode estar em modo humano, com a Aurora fora. Uma
+# lista fechada funciona nos dois modos e não custa uma chamada de LLM por "ok".
+_AFIRMATIVAS = (
+    "sim", "confirmo", "confirmado", "confirmar", "ok", "okay", "beleza", "combinado",
+    "fechado", "isso", "claro", "certo", "positivo", "estarei", "vou", "to dentro",
+    "tudo certo", "pode ser", "perfeito", "valeu",
+)  # fmt: skip
+# "nao vou" e "nao posso" contem "vou": a negacao vence a afirmativa, sempre. Falso
+# positivo aqui marca como confirmada uma visita que o cliente acabou de desmarcar.
+_NEGATIVAS = ("nao", "n vou", "desmarc", "cancel", "remarc", "outro dia", "outro horario")
+
+
+def confirmou(texto: str) -> bool:
+    """Se a fala do cliente é um "sim" a respeito do lembrete."""
+    limpo = _sem_acento(texto)
+    if any(negativa in limpo for negativa in _NEGATIVAS):
+        return False
+    return any(afirmativa in limpo for afirmativa in _AFIRMATIVAS)
+
+
+def confirmar_se_o_cliente_respondeu(sessao: Session, conversa: Conversa, texto: str) -> bool:
+    """S-07 §6 — o test drive vira `confirmado`, e o vendedor vê isso na tela.
+
+    Só confirma o que foi lembrado: sem `lembrete_em`, uma mensagem qualquer com "ok"
+    confirmaria uma visita sobre a qual o cliente nunca foi perguntado. Sem resposta,
+    segue `agendado` — que é a outra metade da regra da spec.
+
+    Não faz `commit`: quem chama está no meio de gravar a mensagem que chegou, e as duas
+    coisas são o mesmo fato.
+    """
+    if not confirmou(texto):
+        return False
+    test_drive = sessao.scalars(
+        select(TestDrive)
+        .where(
+            TestDrive.conversa_id == conversa.id,
+            TestDrive.status == "agendado",
+            TestDrive.lembrete_em.is_not(None),
+            TestDrive.inicio > agora(),
+        )
+        .order_by(TestDrive.inicio)
+    ).first()
+    if test_drive is None:
+        return False
+    test_drive.status = "confirmado"
+    test_drive.confirmado_em = agora()
+    return True

@@ -25,6 +25,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.agenda import confirmar_se_o_cliente_respondeu
 from app.configuracao import Chave, valor
 from app.conversas import ConversaAberta, _pendente
 from app.core.http import Indisponivel, buscar
@@ -427,6 +428,8 @@ def receber(sessao: Session, payload: dict[str, object]) -> uuid.UUID | None:
     )
     sessao.add(entrada)
     conversa.ultima_mensagem_em = agora()
+    # S-07 §6 — o lembrete sai por aqui, e é por aqui que o "sim" volta.
+    confirmar_se_o_cliente_respondeu(sessao, conversa, texto)
     try:
         sessao.commit()
     except IntegrityError:

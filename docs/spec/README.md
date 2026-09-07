@@ -28,9 +28,9 @@ depois dela, a venda acontece nos sistemas que a Sol & Volt já opera. Só o **d
 produto, para que a landing tivesse uma porta direta de test drive. A parte que veio é a que não
 depende de ninguém: agenda, atribuição de vendedor e gravação. O que dependia da S-05 (oferecer o
 chassi já reservado para o próprio lead) deixou de ser inerte quando a reserva entrou; o que
-dependia da S-06 e da S-04 veio depois — o desfecho da §9 entrou quando a tela autenticada e o
-WhatsApp existiam. Lembrete (§6) e dossiê (§8) continuam fora: o dossiê espera as objeções da
-`buscar_conhecimento`, tool que a S-03 não implementou.
+dependia da S-06 e da S-04 veio depois — lembrete (§6) e desfecho (§9) entraram quando a tela
+autenticada e o WhatsApp existiam. Remarcação (§7) e dossiê (§8) continuam fora: o dossiê espera
+as objeções da `buscar_conhecimento`, tool que a S-03 não implementou.
 
 ## As specs
 
@@ -55,7 +55,7 @@ passam a existir.
 | [S-04](S-04-fila-de-aprovacao.md) | Fila de aprovação | A pausa, a tela da Neuza, o Espelho de Condição | ✔ pronta — fila, Espelho, tela, notificação por WhatsApp e escalonamento | |
 | [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ✔ pronta — a operação, o portão, a rotina de 5 min e o aviso à equipe | ✅ concorrência — **existe** |
 | [S-06](S-06-handoff-whatsapp.md) | Handoff WhatsApp | Token, webhook, continuidade | ◐ parcial — §1 a §7 sim; o backoff da §8 espera a fila do worker | |
-| [S-07](S-07-test-drive.md) | Test drive | Agenda real, dossiê do vendedor, **desfecho** | ◐ parcial — agenda e desfecho sim; lembrete (§6), remarcação (§7) e dossiê (§8) não | |
+| [S-07](S-07-test-drive.md) | Test drive | Agenda real, dossiê do vendedor, **desfecho** | ◐ parcial — agenda, lembrete e desfecho sim; remarcação (§7) e dossiê (§8) não | |
 | [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo, teto, alertas e as duas telas sim; Langfuse não | |
 | [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem, máscara e a varredura sim; retenção não | ✅ varredura de logs — **existe** |
 | [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose (4 dos 9 containers), seed e CI sim; backup e runbook não | |

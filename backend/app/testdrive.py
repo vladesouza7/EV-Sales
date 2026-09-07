@@ -1,9 +1,10 @@
 """S-07 — agendamento de test drive, e o desfecho que fecha a jornada.
 
 Recorte implementado: agenda real, atribuição de vendedor, gravação com o índice de
-exclusão decidindo, e o **registro de desfecho da §9** — o único ponto em que o EV-Sales
-sabe que a venda aconteceu. **Fora daqui, ainda:** lembrete de 24h (§6) e dossiê do
-vendedor (§8), que depende das objeções da `buscar_conhecimento`, tool que não existe.
+exclusão decidindo, o **lembrete da §6** e o **registro de desfecho da §9** — o único ponto
+em que o EV-Sales sabe que a venda aconteceu. **Fora daqui, ainda:** remarcação (§7) e o
+dossiê do vendedor (§8), que depende das objeções da `buscar_conhecimento`, tool que a
+S-03 não implementou.
 
 O desfecho é a fronteira do ADR-011 sendo respeitada: o sistema registra **que** vendeu, e
 nada mais. Nota fiscal, financiamento e documentação acontecem na loja, e nem por
@@ -25,9 +26,11 @@ from sqlalchemy.orm import Session
 from app.agenda import ChassiIndisponivel, HorarioIndisponivel, agendar, horarios_disponiveis
 from app.autenticacao import exige_perfil
 from app.core.dinheiro import formatar
+from app.core.pii import decifrar
+from app.core.validacao import primeiro_nome
 from app.db import FUSO, agora, obter_sessao
 from app.leads import LeadEntrada, abrir_conversa
-from app.modelos import Lead, Reserva, TestDrive, Unidade, Usuario, Vendedor
+from app.modelos import Conversa, Lead, Reserva, TestDrive, Unidade, Usuario, Vendedor
 from app.observabilidade import registrar
 
 logger = logging.getLogger(__name__)
@@ -53,6 +56,24 @@ EFEITOS: dict[str, tuple[str | None, str | None, str]] = {
 # depois. Da segunda em diante o item fica visível para a gerente, que vê todos.
 PRIMEIRA_COBRANCA = timedelta(hours=2)
 SEGUNDA_COBRANCA = timedelta(hours=24)
+
+# §6 — 24 h antes, ou às 18h da véspera se o test drive é de manhã. Um lembrete às 9h da
+# véspera para uma visita às 9h chega no meio do dia de trabalho de quem vai dirigir; às
+# 18h ele chega quando a pessoa está olhando o telefone.
+ANTECEDENCIA_DO_LEMBRETE = timedelta(hours=24)
+HORA_DA_VESPERA = 18
+LEMBRETE = (
+    "Oi, {nome}! Passando pra lembrar do seu test drive amanhã às {hora}, com {vendedor} "
+    "aqui na loja. Confirma pra mim? Se precisar remarcar, é só falar."
+)
+# §6, última linha: fora da janela de 24 h do WhatsApp o lembrete vira tarefa de ligação.
+# ponytail: a tarefa é a mensagem no telefone do vendedor, não uma linha em `tarefas`. São
+# quatro pessoas e ~11 visitas por mês; uma tabela de tarefa que ninguém fecha é pior que
+# um aviso que alguém lê. Vira tabela quando alguém precisar marcar "liguei".
+TAREFA_DE_LIGACAO = (
+    "EV-Sales · liga para {cliente}: test drive amanhã às {hora}, {carro}. A janela de 24 h "
+    "do WhatsApp fechou, então o lembrete não pode sair por mensagem."
+)
 
 
 class TestDriveEntrada(LeadEntrada):
@@ -290,6 +311,81 @@ def registrar_desfecho(
     return {"desfecho": desfecho, "situacao_do_lead": situacao}
 
 
+def quando_lembrar(inicio: datetime) -> datetime:
+    """§6 — 24 h antes, ou às 18h da véspera se o test drive é de manhã.
+
+    O "de manhã" é o que torna a regra da spec necessária: 24 h antes de uma visita às 9h
+    é 9h do dia anterior, quando a pessoa está começando o dia dela e não olhando o
+    telefone. Às 18h da véspera o lembrete ainda dá tempo de remarcar.
+    """
+    local = inicio.astimezone(FUSO)
+    if local.hour >= 12:
+        return inicio - ANTECEDENCIA_DO_LEMBRETE
+    vespera = local - timedelta(days=1)
+    return vespera.replace(hour=HORA_DA_VESPERA, minute=0, second=0, microsecond=0)
+
+
+def enviar_lembretes(sessao: Session) -> int:
+    """§6 — o **único** envio automático do v1, e ele é legítimo (ADR-005).
+
+    Acontece dentro de uma conversa que o cliente começou, sobre um compromisso que ele
+    marcou. Quem decide se pode sair é a `pode_enviar` da S-06 §6, não esta função: fora
+    da janela de 24 h do WhatsApp o lembrete vira tarefa de ligação para o vendedor.
+    """
+    from app.whatsapp import avisar_equipe, enviar
+
+    agora_ = agora()
+    tratados = 0
+    for test_drive in sessao.scalars(
+        select(TestDrive).where(
+            TestDrive.lembrete_em.is_(None),
+            TestDrive.status.in_(("agendado", "confirmado")),
+            TestDrive.inicio > agora_,
+        )
+    ):
+        if quando_lembrar(test_drive.inicio) > agora_:
+            continue
+        conversa = sessao.get(Conversa, test_drive.conversa_id)
+        lead = sessao.get(Lead, test_drive.lead_id)
+        vendedor = sessao.get(Vendedor, test_drive.vendedor_id)
+        if conversa is None or lead is None or vendedor is None:  # pragma: no cover - FK
+            continue
+
+        hora = _hora(test_drive.inicio)
+        saiu = enviar(
+            sessao,
+            conversa,
+            LEMBRETE.format(
+                nome=primeiro_nome(decifrar(lead.nome_cifrado)),
+                hora=hora,
+                vendedor=vendedor.nome,
+            ),
+        )
+        if not saiu:
+            # O nome vai mascarado: é mensagem para funcionário, e a S-09 §3 só libera o
+            # nome inteiro no dossiê do lead do próprio vendedor.
+            avisar_equipe(
+                sessao,
+                [vendedor],
+                TAREFA_DE_LIGACAO.format(
+                    cliente=lead.nome_mascarado(),
+                    hora=hora,
+                    carro=_carro(sessao, test_drive.chassi),
+                ),
+            )
+        test_drive.lembrete_em = agora_
+        sessao.commit()
+        registrar(
+            sessao,
+            test_drive.conversa_id,
+            "evento",
+            "lembrete_enviado" if saiu else "lembrete_virou_ligacao",
+            dados={"test_drive_id": str(test_drive.id), "chassi": test_drive.chassi},
+        )
+        tratados += 1
+    return tratados
+
+
 def cobrar_desfechos(sessao: Session) -> int:
     """§9, "contra o esquecimento" — as duas cobranças, e nada além delas.
 
@@ -353,6 +449,11 @@ def _nome_do_cliente(sessao: Session, lead_id: uuid.UUID) -> str:
     (S-09 §3). O nome completo é do dossiê da §8, que é do lead do próprio vendedor."""
     lead = sessao.get(Lead, lead_id)
     return lead.nome_mascarado() if lead is not None else "?"
+
+
+def _hora(quando: datetime) -> str:
+    local = quando.astimezone(FUSO)
+    return f"{local.hour}h" if local.minute == 0 else f"{local.hour}h{local.minute:02d}"
 
 
 def _ip(requisicao: Request) -> str:

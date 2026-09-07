@@ -14,42 +14,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import whatsapp
-from app.configuracao import Chave, gravar
 from app.core.pii import cifrar, hash_telefone
 from app.db import agora
 from app.modelos import Conversa, Lead, Mensagem, TokenMigracao, Trilha, Unidade, Usuario
 from app.whatsapp import JANELA_DE_RESPOSTA, formatar, pode_enviar, receber
 
+from .conftest import TELEFONE_DA_LOJA
 from .test_conversas import LEAD, SEAL
 
-TELEFONE = "+5583991575299"
+TELEFONE = TELEFONE_DA_LOJA
 JID = "5583991575299@s.whatsapp.net"
-
-
-@pytest.fixture
-def configurado(sessao: Session) -> None:
-    """A loja com WhatsApp cadastrado. Sem isto não há link nem envio — de propósito."""
-    from app.autenticacao import criar_usuario
-
-    rai = criar_usuario(sessao, nome="Raí Sol", email="rai@solevolt.com.br",
-                        senha="senha-de-teste-12", perfil="dono")  # fmt: skip
-    gravar(sessao, Chave.whatsapp_numero, TELEFONE, rai)
-    gravar(sessao, Chave.evolution_url, "http://evolution:8080", rai)
-    gravar(sessao, Chave.evolution_instancia, "solevolt", rai)
-    gravar(sessao, Chave.evolution_chave, "chave-da-instancia", rai)
-
-
-@pytest.fixture
-def enviados(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
-    """Nada sai para a rede. O que a suíte confere é **se** saiu e com o quê."""
-    saidas: list[dict[str, object]] = []
-
-    def falso(url: str, cabecalhos: dict[str, str], corpo: bytes | None = None) -> int:
-        saidas.append({"url": url, "corpo": (corpo or b"").decode()})
-        return 200
-
-    monkeypatch.setattr(whatsapp, "buscar", falso)
-    return saidas
 
 
 def _payload(texto: str, message_id: str = "MSG1", jid: str = JID) -> dict[str, object]:

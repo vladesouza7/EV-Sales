@@ -21,13 +21,21 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from app.configuracao import esquecer  # noqa: E402
+from app.configuracao import (  # noqa: E402
+    Chave,
+    esquecer,  # noqa: E402
+    gravar,
+)
 from app.db import Base, engine  # noqa: E402
 from app.ia import turno as modulo_turno  # noqa: E402
 from app.limite import limpar_limites  # noqa: E402
 from app.main import app  # noqa: E402
 
 from .dubles import ProvedorDuble  # noqa: E402
+
+# O número da loja e o do lead da suíte são o mesmo valor: dois números diferentes fariam
+# o link `wa.me` apontar para um telefone e o envio sair por outro, e nenhum teste veria.
+TELEFONE_DA_LOJA = "+5583991575299"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -62,6 +70,39 @@ def sessao() -> Iterator[Session]:
 def cliente() -> Iterator[TestClient]:
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def configurado(sessao: Session) -> None:
+    """A loja com WhatsApp cadastrado. Sem isto não há link nem envio — de propósito.
+
+    Mora aqui porque três arquivos precisam dela: o handoff da S-06, o aviso da S-04 e o
+    lembrete da S-07 §6. Importar fixture de um módulo de teste para outro funciona e
+    engana o linter; o `conftest` é o lugar em que o pytest já procura.
+    """
+    from app.autenticacao import criar_usuario
+
+    rai = criar_usuario(sessao, nome="Raí Sol", email="rai@solevolt.com.br",
+                        senha="senha-de-teste-12", perfil="dono")  # fmt: skip
+    gravar(sessao, Chave.whatsapp_numero, TELEFONE_DA_LOJA, rai)
+    gravar(sessao, Chave.evolution_url, "http://evolution:8080", rai)
+    gravar(sessao, Chave.evolution_instancia, "solevolt", rai)
+    gravar(sessao, Chave.evolution_chave, "chave-da-instancia", rai)
+
+
+@pytest.fixture
+def enviados(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
+    """Nada sai para a rede. O que a suíte confere é **se** saiu e com o quê."""
+    from app import whatsapp
+
+    saidas: list[dict[str, object]] = []
+
+    def falso(url: str, cabecalhos: dict[str, str], corpo: bytes | None = None) -> int:
+        saidas.append({"url": url, "corpo": (corpo or b"").decode()})
+        return 200
+
+    monkeypatch.setattr(whatsapp, "buscar", falso)
+    return saidas
 
 
 @pytest.fixture(autouse=True)

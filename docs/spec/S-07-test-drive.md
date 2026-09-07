@@ -2,7 +2,8 @@
 
 **Depende de:** [S-05](S-05-reserva-de-chassi.md)
 **Decide por:** [ADR-001](../adr/ADR-001-postgres-fonte-da-verdade.md)
-**Estado:** ◐ parcial — ver o quadro abaixo
+**Estado:** ◐ parcial — agenda, lembrete e desfecho sim; remarcação (§7) e dossiê (§8) não.
+Ver o quadro abaixo.
 
 ---
 
@@ -19,7 +20,7 @@ de test drive antes da Aurora existir.
 | §3 | Oferta de no máximo 3 horários reais | ✔ pela página `/test-drive`; **não** como tool da Aurora |
 | §4 | Gravação, atribuição de vendedor, conversa em `encerrada` com desfecho | ✔ exceto a notificação ao vendedor (§4.3), que depende da [S-06](S-06-handoff-whatsapp.md) |
 | §5 | Confirmação para o cliente | ✔ na tela; ainda não pelo WhatsApp |
-| §6 | Lembrete de 24h | ✗ — a [S-06](S-06-handoff-whatsapp.md) destravou o envio, mas o lembrete não foi escrito |
+| §6 | Lembrete de 24h | ✔ único, carimbado em `lembrete_em`; fora da janela de 24 h vira tarefa de ligação, e o "sim" do cliente marca `confirmado` |
 | §7 | Remarcação e cancelamento | ✗ |
 | §8 | Dossiê do atendimento | ✗ as objeções vêm da `buscar_conhecimento`, tool que a [S-03](S-03-agente-aurora.md) não implementou |
 | §9 | Registro de desfecho | ✔ `/desfecho`, `app/testdrive.py` — os quatro desfechos, o rastro e as duas cobranças |

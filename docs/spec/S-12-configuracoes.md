@@ -145,6 +145,14 @@ Falhou por recusa: `422`, com a mensagem do provedor **na resposta e na tela, nu
 de autenticação costuma ecoar a credencial que o causou, e log é uma das quatro superfícies da
 invariante 5.
 
+**`evolution_url` é diferente em dev e em prod, e é a tela que sabe disso.** Em prod a api sobe
+dentro do compose e o destino é `http://evolution:8080`, o nome do serviço. Em dev o
+[`subir-dev.sh`](../../scripts/subir-dev.sh) roda o uvicorn no host, onde esse nome não resolve — lá
+o valor é `http://localhost:8080`. Verificado com a imagem no ar: com o nome do serviço, a sonda
+respondeu "não deu para falar com a Evolution agora, valor gravado", que é a linha de
+indisponibilidade da tabela acima funcionando — se ela tratasse isso como recusa, a configuração
+de dev seria impossível de salvar.
+
 A rota da Evolution é `fetchInstances`, e **não** `connectionState/{instancia}` — conferido
 subindo a imagem v2.3.7. Com a instância ainda inexistente, `connectionState` devolve `404` tanto
 para a chave certa quanto para a errada: ele não separa credencial de nome, e sondar por ele

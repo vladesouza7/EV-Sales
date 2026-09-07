@@ -57,7 +57,8 @@
     // S-12 §2 — o rótulo e o grupo de cada chave. A ordem aqui é a ordem da tela.
     var CHAVES = {
       whatsapp_numero: { grupo: "whatsapp", rotulo: "Número da loja", dica: "+55 83 99157-5299" },
-      evolution_url: { grupo: "whatsapp", rotulo: "URL da Evolution", dica: "https://…" },
+      // Em dev a API roda no host e o nome do serviço não resolve; em prod ela sobe no compose.
+      evolution_url: { grupo: "whatsapp", rotulo: "URL da Evolution", dica: "dev: http://localhost:8080 · prod: http://evolution:8080" },
       evolution_instancia: { grupo: "whatsapp", rotulo: "Instância", dica: "solevolt" },
       evolution_chave: { grupo: "whatsapp", rotulo: "Chave da Evolution" },
       llm_provedor: { grupo: "llm", rotulo: "Provedor", lista: true },

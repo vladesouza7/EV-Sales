@@ -19,17 +19,19 @@ de test drive antes da Aurora existir.
 | §3 | Oferta de no máximo 3 horários reais | ✔ pela página `/test-drive`; **não** como tool da Aurora |
 | §4 | Gravação, atribuição de vendedor, conversa em `encerrada` com desfecho | ✔ exceto a notificação ao vendedor (§4.3), que depende da [S-06](S-06-handoff-whatsapp.md) |
 | §5 | Confirmação para o cliente | ✔ na tela; ainda não pelo WhatsApp |
-| §6 | Lembrete de 24h | ✗ depende da [S-06](S-06-handoff-whatsapp.md) |
+| §6 | Lembrete de 24h | ✗ — a [S-06](S-06-handoff-whatsapp.md) destravou o envio, mas o lembrete não foi escrito |
 | §7 | Remarcação e cancelamento | ✗ |
-| §8 | Dossiê do atendimento | ✗ depende de `conversas.qualificacao`, que a [S-03](S-03-agente-aurora.md) preenche |
-| §9 | Registro de desfecho | ✗ depende da tela autenticada da [S-04](S-04-fila-de-aprovacao.md) |
+| §8 | Dossiê do atendimento | ✗ as objeções vêm da `buscar_conhecimento`, tool que a [S-03](S-03-agente-aurora.md) não implementou |
+| §9 | Registro de desfecho | ✔ `/desfecho`, `app/testdrive.py` — os quatro desfechos, o rastro e as duas cobranças |
 
 Duas consequências de ter vindo antes da S-05, e as duas são deliberadas:
 
 1. A condição §3.4 — *"o chassi está `reservado` para este lead ou `disponivel`"* — está no código
-   e o ramo do `reservado` fica **inerte** até existir reserva. Nenhum carro está reservado hoje.
-2. Sem o §9, **nada marca unidade como vendida** — que é exatamente o que a §9 manda de qualquer
-   forma: o sistema nunca infere venda. O que falta é o toque do vendedor, não a trava.
+   e o ramo do `reservado` deixou de ser inerte quando a [S-05](S-05-reserva-de-chassi.md) entrou.
+2. O §9 é hoje o **único** caminho para `unidades.status = 'vendido'`, e é por toque de gente
+   autenticada: a rotina cobra o desfecho duas vezes e nunca o preenche. O CHECK
+   `ck_test_drives_desfecho_tem_autor` recusa desfecho sem quem marcou e sem quando — a spec diz
+   "o sistema nunca marca vendido sozinho", e isso virou constraint, não intenção.
 
 ---
 

@@ -361,7 +361,7 @@ def test_a_rotina_libera_e_escala(sessao: Session, unidade: None) -> None:
     reserva.expira_em = agora() - timedelta(hours=1)
     sessao.commit()
 
-    liberadas, _ = ciclo(sessao)
+    liberadas, _, _ = ciclo(sessao)
 
     assert liberadas == 1
     sessao.expire_all()

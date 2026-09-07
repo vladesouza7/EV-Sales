@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Desfecho — Sol &amp; Volt Veículos Elétricos</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+  <script src="/static/tema.js"></script>
+</head>
+
+<body>
+  <header class="wrap nav">
+    <a class="marca" href="/desfecho">
+      <span class="marca-simbolo">⚡</span>
+      <span>
+        <b>Desfecho</b>
+        <small id="quem">carregando…</small>
+      </span>
+    </a>
+    <span class="acoes">
+      <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+      <button class="humano" type="button" id="sair">sair</button>
+    </span>
+  </header>
+
+  <main class="wrap fila" id="fila" aria-live="polite">
+    <p>Carregando…</p>
+  </main>
+
+  <script>
+    // S-07 §9 — dois toques, e o segundo só aparece depois do primeiro: "compareceu?" e
+    // então "e aí?". Quem não compareceu não recebe a segunda pergunta, porque o desfecho
+    // dele já está decidido — e a rota recusa a contradição, não só a tela.
+    var DESFECHOS = [
+      { valor: "vendeu", rotulo: "VENDEU", classe: "aprovar" },
+      { valor: "vai_pensar", rotulo: "vai pensar", classe: "recusar" },
+      { valor: "desistiu", rotulo: "desistiu", classe: "recusar" }
+    ];
+    var fila = document.getElementById("fila");
+
+    function irParaLogin() {
+      location.href = "/entrar?destino=" + encodeURIComponent(location.pathname);
+    }
+
+    async function pedir(caminho, opcoes) {
+      var resposta = await fetch(caminho, opcoes);
+      if (resposta.status === 401) { irParaLogin(); throw new Error("sem sessão"); }
+      return resposta;
+    }
+
+    function cartao(item) {
+      var artigo = document.createElement("article");
+      artigo.className = "pedido";
+      artigo.innerHTML =
+        '<header><span class="quem"></span>' +
+        (item.cobrancas > 1 ? '<span class="desde" data-urgente="sim">esquecido</span>' : "") +
+        "</header>" +
+        '<p class="carro"></p>' +
+        '<p class="detalhe">compareceu?</p>' +
+        '<div class="decisao">' +
+        '<button class="aprovar" type="button">SIM</button>' +
+        '<button class="recusar" type="button">não</button>' +
+        "</div>";
+
+      // textContent: o nome vem do banco, e nome com "<" não vira marcação.
+      artigo.querySelector(".quem").textContent = item.cliente + " · " + item.quando;
+      artigo.querySelector(".carro").textContent = item.carro;
+      artigo.querySelector(".aprovar").addEventListener("click", function () {
+        perguntarDesfecho(item, artigo);
+      });
+      artigo.querySelector(".recusar").addEventListener("click", function () {
+        registrar(item, false, "nao_compareceu", artigo);
+      });
+      return artigo;
+    }
+
+    function perguntarDesfecho(item, artigo) {
+      if (artigo.querySelector(".motivos")) return;
+      artigo.querySelector(".decisao").remove();
+      artigo.querySelector(".detalhe").textContent = "e aí?";
+      var caixa = document.createElement("div");
+      caixa.className = "motivos";
+      DESFECHOS.forEach(function (opcao) {
+        var botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = opcao.classe;
+        botao.textContent = opcao.rotulo;
+        botao.addEventListener("click", function () {
+          registrar(item, true, opcao.valor, artigo);
+        });
+        caixa.appendChild(botao);
+      });
+      artigo.appendChild(caixa);
+    }
+
+    async function registrar(item, compareceu, desfecho, artigo) {
+      artigo.querySelectorAll("button").forEach(function (b) { b.disabled = true; });
+      try {
+        var resposta = await pedir("/api/test-drives/" + item.test_drive_id + "/desfecho", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ compareceu: compareceu, desfecho: desfecho })
+        });
+        if (!resposta.ok) {
+          var corpo = await resposta.json().catch(function () { return {}; });
+          alert((corpo.detail && corpo.detail.mensagem) || "Não deu para registrar.");
+        }
+      } catch (falha) { return; }
+      carregar();
+    }
+
+    async function carregar() {
+      var resposta;
+      try { resposta = await pedir("/api/desfechos/pendentes"); } catch (falha) { return; }
+      if (resposta.status === 404) {
+        fila.innerHTML = "<p>Este acesso não alcança os desfechos.</p>";
+        return;
+      }
+      var itens = await resposta.json();
+      fila.textContent = "";
+      if (!itens.length) {
+        fila.innerHTML = "<p>Nenhum test drive esperando desfecho.</p>";
+        return;
+      }
+      itens.forEach(function (item) { fila.appendChild(cartao(item)); });
+    }
+
+    document.getElementById("sair").addEventListener("click", async function () {
+      await fetch("/api/sair", { method: "POST" });
+      location.href = "/entrar";
+    });
+
+    (async function inicio() {
+      try {
+        var eu = await (await pedir("/api/eu")).json();
+        document.getElementById("quem").textContent = eu.nome;
+      } catch (falha) { return; }
+      carregar();
+      // ponytail: sem polling. Esta tela é aberta pelo aviso do WhatsApp, resolve um item
+      // e fecha — nada muda por trás enquanto o vendedor olha.
+    })();
+  </script>
+</body>
+
+</html>

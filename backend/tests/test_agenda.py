@@ -1,7 +1,8 @@
 """S-07 — critérios de aceite da agenda de test drive.
 
-Fora deste arquivo, por não estarem implementados: lembrete de 24h (§6), dossiê do
-vendedor (§8) e registro de desfecho (§9).
+Fora deste arquivo: o registro de desfecho da §9, que tem suíte própria em
+test_desfecho.py. Por não estarem implementados: lembrete de 24h (§6) e dossiê do
+vendedor (§8).
 """
 
 import logging

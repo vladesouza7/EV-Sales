@@ -30,6 +30,10 @@ ETAPAS = (
 )  # fmt: skip
 STATUS_UNIDADE = ("disponivel", "reservado", "vendido", "indisponivel")
 STATUS_TEST_DRIVE = ("agendado", "confirmado", "realizado", "nao_compareceu", "cancelado")
+# S-07 §9 — os quatro desfechos, e cada um decide o status da unidade, da reserva e da
+# situação do lead. A tabela dessa decisão mora em `app/testdrive.py`, num lugar só.
+DESFECHOS = ("vendeu", "vai_pensar", "desistiu", "nao_compareceu")
+SITUACOES_DO_LEAD = ("novo", "em_negociacao", "ganho", "perdido", "a_recontatar")
 # S-03 §1. Fonte fora desta lista não entra: WLTP e Inmetro só não se confundem
 # enquanto o rótulo tiver uma grafia só (invariante 6).
 FONTES_DE_AUTONOMIA = ("INMETRO_PBEV_2026", "WLTP", "FABRICANTE")
@@ -43,6 +47,9 @@ class Lead(Base):
     telefone_cifrado: Mapped[bytes] = mapped_column(LargeBinary)
     telefone_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     origem: Mapped[str] = mapped_column(String(32), default="landing")
+    # S-07 §9 — onde o desfecho do test drive aterrissa. Nasce `novo` e só muda por toque
+    # de gente autenticada: nenhuma rotina promove lead a `ganho`.
+    situacao: Mapped[str] = mapped_column(String(16), default="novo", server_default="novo")
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
     ultimo_acesso_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
@@ -229,6 +236,22 @@ class TestDrive(Base):
     __table_args__ = (
         CheckConstraint(f"status IN {STATUS_TEST_DRIVE}", name="ck_test_drives_status"),
         CheckConstraint("fim > inicio", name="ck_test_drives_intervalo_positivo"),
+        CheckConstraint(
+            f"desfecho IS NULL OR desfecho IN {DESFECHOS}", name="ck_test_drives_desfecho"
+        ),
+        # S-07 §9 — "só por toque de vendedor autenticado, com auditoria". Desfecho sem
+        # autor e sem hora é recusado pelo banco, não só evitado pelo código: é deste
+        # registro que sai `unidades.status = 'vendido'`, que ninguém desfaz depois.
+        CheckConstraint(
+            "(desfecho IS NULL) = (desfecho_por IS NULL)"
+            " AND (desfecho IS NULL) = (desfecho_em IS NULL)",
+            name="ck_test_drives_desfecho_tem_autor",
+        ),
+        Index(
+            "ix_test_drives_sem_desfecho",
+            "inicio",
+            postgresql_where=literal_column("desfecho IS NULL"),
+        ),
         # Cancelado não ocupa horário — senão desmarcar não devolveria a vaga.
         ExcludeConstraint(
             (literal_column("vendedor_id"), "="),
@@ -256,6 +279,17 @@ class TestDrive(Base):
     status: Mapped[str] = mapped_column(String(16), default="agendado")
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
     confirmado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # S-07 §9 — o desfecho, e quem o marcou. O CHECK acima obriga os três juntos: desfecho
+    # sem autor e sem hora não é registro, é palpite, e é dele que sai `unidades.vendido`.
+    compareceu: Mapped[bool | None] = mapped_column(Boolean, default=None)
+    desfecho: Mapped[str | None] = mapped_column(String(16), default=None)
+    desfecho_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    desfecho_por: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="RESTRICT"), default=None
+    )
+    # Quantas vezes o vendedor já foi cobrado (§9, "contra o esquecimento"). Um contador
+    # em vez de dois carimbos: a rotina só precisa saber se cabe a próxima cobrança.
+    cobrancas: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Trilha(Base):

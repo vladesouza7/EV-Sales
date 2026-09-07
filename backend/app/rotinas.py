@@ -1,12 +1,15 @@
 """O que o sistema faz sozinho, sem ninguém clicar.
 
-Duas coisas, e as duas já existiam escritas e sem quem as chamasse:
+Três coisas, e as duas primeiras já existiam escritas e sem quem as chamasse:
 
 1. **Liberar reserva vencida** ([S-05 §4](../../docs/spec/S-05-reserva-de-chassi.md)) — 72 h
    e o carro volta ao pátio. Sem isto, `liberar_vencidas` é código morto e um carro fica
    `reservado` para sempre: catálogo mentindo, que é o que o ADR-001 existe para impedir.
 2. **Escalar aprovação parada** ([S-04 §3](../../docs/spec/S-04-fila-de-aprovacao.md)) — 15
    minutos sem a Neuza decidir e a mesma notificação vai para o Raí.
+3. **Cobrar desfecho esquecido** ([S-07 §9](../../docs/spec/S-07-test-drive.md)) — 2 h depois
+   do test drive, e de novo em 24 h. Ela **lembra**; nunca registra. Marcar uma venda por
+   decurso de prazo é o cenário que a spec proíbe por escrito.
 
 ponytail: um `asyncio.Task` no processo da API, não Redis com worker. É uma loja, um
 servidor (S-10), e a operação é idempotente — `liberar_vencidas` só age sobre unidade que
@@ -23,18 +26,20 @@ from sqlalchemy.orm import Session
 from app.aprovacao import escalar_pendentes
 from app.db import Sessao
 from app.reserva import liberar_vencidas
+from app.testdrive import cobrar_desfechos
 
 logger = logging.getLogger(__name__)
 
 INTERVALO_S = 300  # S-05 §4 — "rotina a cada 5 min"
 
 
-def ciclo(sessao: Session) -> tuple[int, int]:
+def ciclo(sessao: Session) -> tuple[int, int, int]:
     """Uma passada. Separada do laço porque é o que a suíte consegue chamar — testar
     `while True: await sleep(300)` seria testar o `asyncio`, não a regra."""
     liberadas = liberar_vencidas(sessao)
     escalados = escalar_pendentes(sessao)
-    return len(liberadas), escalados
+    cobrados = cobrar_desfechos(sessao)
+    return len(liberadas), escalados, cobrados
 
 
 async def _girar() -> None:
@@ -42,12 +47,14 @@ async def _girar() -> None:
         await asyncio.sleep(INTERVALO_S)
         try:
             with Sessao() as sessao:
-                liberadas, escalados = ciclo(sessao)
-            if liberadas or escalados:
+                liberadas, escalados, cobrados = ciclo(sessao)
+            if liberadas or escalados or cobrados:
                 logger.info(
-                    "rotina: %d reserva(s) liberada(s), %d aprovação(ões) escalada(s)",
+                    "rotina: %d reserva(s) liberada(s), %d aprovação(ões) escalada(s), "
+                    "%d desfecho(s) cobrado(s)",
                     liberadas,
                     escalados,
+                    cobrados,
                 )
         except Exception:
             # Uma falha não pode matar o laço: sem ele, reserva vencida nunca mais é

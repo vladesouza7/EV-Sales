@@ -2,6 +2,8 @@
 
 import logging
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -13,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app import rotinas
 from app.aprovacao import router as rotas_de_aprovacao
 from app.arquivos import NomeInvalido, caminho_da_foto, ler
 from app.atendimentos import router as rotas_de_atendimento
@@ -36,7 +39,22 @@ FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 # ponytail: basicConfig resolve; a configuração de verdade (formato, Langfuse) é da S-08.
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
-app = FastAPI(title="EV-Sales — Sol & Volt")
+@asynccontextmanager
+async def ciclo_de_vida(_: FastAPI) -> AsyncIterator[None]:
+    """S-05 §4 e S-04 §3 — o que roda sozinho sobe junto com a API.
+
+    ponytail: um task no processo, não um container `worker`. Vira consumidor de fila
+    quando houver fila (S-10 §1); enquanto isso, é isto ou `liberar_vencidas` continuar
+    sendo código que ninguém chama.
+    """
+    tarefa = rotinas.começar()
+    try:
+        yield
+    finally:
+        await rotinas.parar(tarefa)
+
+
+app = FastAPI(title="EV-Sales — Sol & Volt", lifespan=ciclo_de_vida)
 app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 app.include_router(rotas_de_autenticacao)
 app.include_router(rotas_de_aprovacao)

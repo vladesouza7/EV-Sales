@@ -17,7 +17,7 @@ from app import whatsapp
 from app.configuracao import Chave, gravar
 from app.core.pii import cifrar, hash_telefone
 from app.db import agora
-from app.modelos import Conversa, Lead, Mensagem, TokenMigracao, Trilha, Unidade
+from app.modelos import Conversa, Lead, Mensagem, TokenMigracao, Trilha, Unidade, Usuario
 from app.whatsapp import JANELA_DE_RESPOSTA, formatar, pode_enviar, receber
 
 from .test_conversas import LEAD, SEAL
@@ -374,3 +374,73 @@ def test_o_turno_do_whatsapp_e_o_mesmo_do_chat(
     ).all()
     assert len(saidas) == 1
     assert len(enviados) == 1
+
+
+# ── aviso para a equipe: a segunda porta de saída ────────────────────────────────
+
+
+def _neuza_com_telefone(sessao: Session) -> Usuario:
+    from app.autenticacao import criar_usuario
+
+    neuza = criar_usuario(sessao, nome="Neuza Andrade", email="neuza@solevolt.com.br",
+                          senha="senha-de-teste-12", perfil="gerente")  # fmt: skip
+    neuza.telefone_cifrado = cifrar(TELEFONE)
+    sessao.commit()
+    return neuza
+
+
+def test_aviso_para_a_equipe_sai_sem_mensagem_de_entrada(
+    sessao: Session, configurado: None, enviados: list[dict[str, object]]
+) -> None:
+    """A regra de nunca enviar primeiro protege o número contra ban por mensagem a
+    **cliente**. Funcionário cadastrou o telefone na tela do dono — é o consentimento."""
+    neuza = _neuza_com_telefone(sessao)
+
+    assert whatsapp.avisar_equipe(sessao, [neuza], "reserva para aprovar") == 1
+    assert len(enviados) == 1
+
+
+def test_aviso_para_a_equipe_nao_alcanca_cliente(sessao: Session, configurado: None) -> None:
+    """O tipo é a garantia: um `Lead` não entra por aqui, e alargar exige mexer na
+    assinatura — que é uma linha de diff difícil de não ver."""
+    lead = Lead(nome_cifrado=cifrar("Tarcísio"), telefone_cifrado=cifrar(TELEFONE),
+                telefone_hash=hash_telefone(TELEFONE), origem="landing")  # fmt: skip
+    sessao.add(lead)
+    sessao.commit()
+
+    with pytest.raises(TypeError):
+        whatsapp.avisar_equipe(sessao, [lead], "oi")  # type: ignore[list-item]
+
+
+def test_quem_nao_cadastrou_telefone_nao_recebe(
+    sessao: Session, configurado: None, enviados: list[dict[str, object]]
+) -> None:
+    from app.autenticacao import criar_usuario
+
+    sem_telefone = criar_usuario(sessao, nome="Jaqueline S", email="jaq@solevolt.com.br",
+                                 senha="senha-de-teste-12", perfil="gerente")  # fmt: skip
+
+    assert whatsapp.avisar_equipe(sessao, [sem_telefone], "oi") == 0
+    assert enviados == []
+
+
+def test_a_notificacao_da_neuza_nao_leva_telefone_nem_nome_inteiro(
+    sessao: Session, cliente: TestClient, configurado: None, enviados: list[dict[str, object]]
+) -> None:
+    """S-04 §3 com ADR-007: nome mascarado, telefone ausente, preço lido do banco."""
+    from app.aprovacao import solicitar_aprovacao
+
+    _neuza_com_telefone(sessao)
+    sessao.add(Unidade(**SEAL))  # type: ignore[arg-type]
+    sessao.commit()
+    cliente.post("/api/leads", json={"nome": "Tarcísio Nóbrega", "telefone": "+5583988714471"})
+    conversa = sessao.scalars(select(Conversa)).one()
+
+    solicitar_aprovacao(sessao, conversa, str(SEAL["chassi"]))
+
+    assert len(enviados) == 1
+    corpo = str(enviados[0]["corpo"])
+    assert "Tarcísio N." in corpo
+    assert "Nóbrega" not in corpo
+    assert "988714471" not in corpo
+    assert "249.990" in corpo

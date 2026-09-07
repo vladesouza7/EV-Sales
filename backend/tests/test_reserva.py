@@ -340,3 +340,29 @@ def test_a_aurora_nao_tem_tool_de_cancelamento() -> None:
     for etapa in ("reserva", "test_drive", "objecao", "recomendacao"):
         assert proibidas.isdisjoint(tools_da_etapa(etapa))
         assert proibidas.isdisjoint(disponiveis(etapa))
+
+
+# ── S-05 §4 · a rotina que chama a liberação ─────────────────────────────────────
+
+
+def test_a_rotina_libera_e_escala(sessao: Session, unidade: None) -> None:
+    """`liberar_vencidas` existia e nunca era chamada — carro ficava `reservado` para
+    sempre, que é catálogo mentindo (ADR-001)."""
+    from app.rotinas import INTERVALO_S, ciclo
+
+    assert INTERVALO_S == 300  # "a cada 5 min", S-05 §4
+
+    conversa, approval_id = _cenario(sessao)
+    reservar_chassi(sessao, conversa, str(SEAL["chassi"]), approval_id)
+    reserva = sessao.scalars(select(Reserva)).one()
+    # As duas datas, porque `ck_reservas_prazo_positivo` recusa prazo negativo — e ela
+    # está certa: reserva que nasce vencida é bug, não cenário.
+    reserva.criada_em = agora() - timedelta(hours=73)
+    reserva.expira_em = agora() - timedelta(hours=1)
+    sessao.commit()
+
+    liberadas, _ = ciclo(sessao)
+
+    assert liberadas == 1
+    sessao.expire_all()
+    assert sessao.get(Unidade, SEAL["chassi"]).status == "disponivel"  # type: ignore[union-attr]

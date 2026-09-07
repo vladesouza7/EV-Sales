@@ -15,6 +15,7 @@ Três regras deste arquivo não são detalhe de implementação:
 """
 
 import logging
+import os
 import secrets
 import uuid
 from datetime import timedelta
@@ -27,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.arquivos import PREFIXO_DOCUMENTOS, garantir_bucket, guardar
 from app.autenticacao import exige_perfil
+from app.core.dinheiro import formatar
 from app.core.pii import decifrar
 from app.db import agora, obter_sessao
 from app.espelho import PRAZO_DA_RESERVA, VALIDADE_DA_CONDICAO, gerar
@@ -37,6 +39,11 @@ from app.observabilidade import registrar
 logger = logging.getLogger(__name__)
 
 VALIDADE_DO_PEDIDO = timedelta(minutes=20)
+
+# Para onde o link da notificação aponta. Não é chave de configuração da S-12: a Neuza não
+# troca o endereço do sistema pela tela, e o `Enum` de lá é fechado com CHECK no banco de
+# propósito. Variável de ambiente, revisada por deploy.
+URL_PUBLICA = os.environ.get("EVSALES_URL_PUBLICA", "http://localhost:8010").rstrip("/")
 ESCALONAMENTO = timedelta(minutes=15)
 MOTIVOS = ("preço", "unidade prometida", "cliente conhecido", "outro")
 
@@ -59,23 +66,38 @@ def expirar_vencidos(sessao: Session) -> None:
     sessao.commit()
 
 
-def escalar_pendentes(sessao: Session) -> None:
+def escalar_pendentes(sessao: Session) -> int:
     """S-04 §3 — sem decisão em 15 minutos, o Raí também recebe e também pode aprovar.
 
-    `UPDATE … WHERE`, como a expiração: a fila é lida por duas pessoas ao mesmo tempo, e
-    marcar em Python deixaria a mesma notificação sair duas vezes.
+    `UPDATE … WHERE … RETURNING`, como a expiração: a fila é lida por duas pessoas ao mesmo
+    tempo, e marcar em Python deixaria a mesma notificação sair duas vezes. O `RETURNING` é
+    o que diz **quais** foram escalados agora — avisar sobre os que já estavam escalados
+    mandaria o mesmo pedido ao Raí a cada 5 minutos, e na décima segunda vez ele silencia
+    o número.
     """
-    sessao.execute(
-        update(PedidoDeAprovacao)
-        .where(
-            PedidoDeAprovacao.status == "pendente",
-            PedidoDeAprovacao.escalado_em.is_(None),
-            PedidoDeAprovacao.criado_em <= agora() - ESCALONAMENTO,
+    escalados = list(
+        sessao.scalars(
+            update(PedidoDeAprovacao)
+            .where(
+                PedidoDeAprovacao.status == "pendente",
+                PedidoDeAprovacao.escalado_em.is_(None),
+                PedidoDeAprovacao.criado_em <= agora() - ESCALONAMENTO,
+            )
+            .values(escalado_em=agora())
+            .returning(PedidoDeAprovacao)
         )
-        .values(escalado_em=agora())
     )
     sessao.commit()
-    # ponytail: a notificação ao Raí sai por log até a Evolution API existir (S-06).
+
+    for pedido in escalados:
+        notificar(
+            sessao,
+            pedido,
+            perfil="dono",
+            abertura="A Neuza ainda não decidiu, e já faz 15 minutos.",
+        )
+        registrar(sessao, pedido.conversa_id, "evento", "aprovacao_escalada")
+    return len(escalados)
 
 
 def solicitar_aprovacao(sessao: Session, conversa: Conversa, chassi: str) -> dict[str, object]:
@@ -113,13 +135,61 @@ def solicitar_aprovacao(sessao: Session, conversa: Conversa, chassi: str) -> dic
         "aprovacao_solicitada",
         dados={"chassi": chassi, "preco_centavos": unidade.preco_centavos},
     )
-    # ponytail: a notificação da §3 sai por log até a Evolution API existir (S-06). O
-    # canal da Neuza é o WhatsApp, e é lá que ela precisa chegar.
-    logger.warning("aprovação pendente: pedido %s, chassi %s", pedido.id, chassi)
+    notificar(sessao, pedido)
     return {
         "resultado": "aguardando_aprovacao",
         "expira_em_minutos": int(VALIDADE_DO_PEDIDO.total_seconds() // 60),
     }
+
+
+def resumo_para_notificacao(sessao: Session, pedido: PedidoDeAprovacao) -> str:
+    """S-04 §3 — o que a Neuza lê no celular antes de decidir.
+
+    **Nome mascarado, telefone ausente** (ADR-007, invariante 5). O link leva ao card e
+    não substitui o login: quem confere a sessão é a API da página de destino.
+    """
+    unidade = sessao.get(Unidade, pedido.chassi)
+    lead = sessao.get(Lead, pedido.lead_id)
+    quem = lead.nome_mascarado() if lead else "cliente"
+    carro = (
+        f"{unidade.marca} {unidade.modelo} {unidade.versao} · {unidade.cor}"
+        if unidade
+        else pedido.chassi
+    )
+    return "\n".join(
+        [
+            "*Reserva para aprovar — Sol & Volt*",
+            "",
+            quem,
+            f"{carro} · chassi …{pedido.chassi[-4:]}",
+            f"{formatar(pedido.preco_centavos)}  ·  sai do estoque por 72h",
+            "",
+            f"Decidir: {URL_PUBLICA}/a/{pedido.codigo}",
+        ]
+    )
+
+
+def notificar(
+    sessao: Session, pedido: PedidoDeAprovacao, perfil: str = "gerente", abertura: str = ""
+) -> int:
+    """Manda para quem tem aquele perfil e telefone cadastrado (S-12 §3).
+
+    Import tardio: `whatsapp` importa `conversas`, que importa daqui — o import no topo
+    fecharia o ciclo. É o preço de a notificação morar onde o pedido nasce, que é onde ela
+    não é esquecida.
+    """
+    from app.whatsapp import avisar_equipe, quem_recebe
+
+    pessoas = quem_recebe(sessao, perfil)
+    if not pessoas:
+        # Sem telefone cadastrado a fila continua funcionando: a decisão vive em
+        # /aprovacoes, e o WhatsApp é o atalho, não o caminho.
+        logger.warning("aprovação pendente sem notificação: nenhum %s com telefone", perfil)
+        return 0
+    texto = resumo_para_notificacao(sessao, pedido)
+    if abertura:
+        texto = f"{abertura}\n\n{texto}"
+    return avisar_equipe(sessao, pessoas, texto)
 
 
 def _numero_do_espelho(sessao: Session) -> str:

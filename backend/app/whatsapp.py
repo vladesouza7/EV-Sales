@@ -16,6 +16,7 @@ import re
 import secrets
 import urllib.parse
 import uuid
+from collections.abc import Sequence
 from datetime import timedelta
 from typing import Annotated
 
@@ -31,7 +32,7 @@ from app.core.pii import cifrar, decifrar, hash_telefone
 from app.core.validacao import normalizar_telefone, primeiro_nome
 from app.db import Sessao, agora, obter_sessao
 from app.ia.turno import executar_turno
-from app.modelos import Conversa, Lead, Mensagem, TokenMigracao
+from app.modelos import Conversa, Lead, Mensagem, TokenMigracao, Usuario, Vendedor
 from app.observabilidade import registrar, registrar_incidente
 
 logger = logging.getLogger(__name__)
@@ -221,6 +222,65 @@ def enviar(sessao: Session, conversa: Conversa, texto: str) -> bool:
             )
             return False
     return True
+
+
+# ── aviso para a equipe ──────────────────────────────────────────────────────────
+
+
+def avisar_equipe(sessao: Session, pessoas: Sequence[Usuario | Vendedor], texto: str) -> int:
+    """A **segunda** porta de saída, e a única que envia sem mensagem de entrada.
+
+    A regra de nunca enviar primeiro (ADR-005) existe para proteger o número comercial de
+    ban por mensagem não solicitada a **cliente**. Funcionário é outra coisa: o telefone da
+    Neuza e o do Tarcísio só existem no banco porque o Raí os cadastrou na tela da S-12, o
+    que é o consentimento — e sem esta porta a notificação da S-04 §3 não existe.
+
+    O que a mantém honesta é o tipo: ela recebe `Usuario` ou `Vendedor`, nunca `Lead`. Um
+    número de cliente não tem como chegar aqui, e há teste disso. Se um dia alguém quiser
+    alargar, vai ter que alargar a assinatura — que é uma linha de diff difícil de não ver.
+    """
+    base = valor(sessao, Chave.evolution_url).rstrip("/")
+    instancia = valor(sessao, Chave.evolution_instancia)
+    chave = valor(sessao, Chave.evolution_chave)
+    if not (base and instancia and chave):
+        logger.warning("aviso para a equipe não saiu: WhatsApp da loja não configurado")
+        return 0
+
+    enviados = 0
+    for pessoa in pessoas:
+        if not isinstance(pessoa, Usuario | Vendedor):  # pragma: no cover - guarda de tipo
+            raise TypeError("avisar_equipe só envia para funcionário cadastrado")
+        if not pessoa.telefone_cifrado:
+            continue
+        numero = decifrar(pessoa.telefone_cifrado).lstrip("+")
+        for bolha in formatar(texto):
+            corpo = json.dumps({"number": numero, "text": bolha}, ensure_ascii=False).encode()
+            try:
+                status = buscar(
+                    f"{base}/message/sendText/{instancia}",
+                    {"apikey": chave, "Content-Type": "application/json"},
+                    corpo,
+                )
+            except Indisponivel:
+                registrar_incidente(sessao, None, "evolution_desconectada", {"etapa": "aviso"})
+                return enviados
+            if not 200 <= status < 300:
+                registrar_incidente(sessao, None, "evolution_desconectada", {"status": status})
+                return enviados
+        enviados += 1
+    return enviados
+
+
+def quem_recebe(sessao: Session, perfil: str) -> Sequence[Usuario]:
+    """Quem tem telefone cadastrado e o perfil pedido. Sem lista de destinatários à parte:
+    uma segunda lista dizendo quem é a gerente divergiria de `usuarios` no primeiro mês."""
+    return sessao.scalars(
+        select(Usuario).where(
+            Usuario.perfil == perfil,
+            Usuario.ativo,
+            Usuario.telefone_cifrado.is_not(None),
+        )
+    ).all()
 
 
 # ── recepção (§4) ────────────────────────────────────────────────────────────────

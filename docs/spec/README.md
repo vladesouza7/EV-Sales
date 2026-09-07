@@ -50,8 +50,8 @@ passam a existir.
 | [S-01](S-01-landing-e-captura-de-lead.md) | Landing e captura de lead | Página, formulário, catálogo somente-leitura | ✔ pronta | |
 | [S-02](S-02-chat-web-e-sessao.md) | Chat web e sessão | Streaming, modelo de conversa, etapas | ✔ pronta | |
 | [S-03](S-03-agente-aurora.md) | A Aurora | Tools, qualificação, **verificação numérica** | ◐ parcial — agente, tools e verificação sim; evals e 2 tools não | ✅ preço · ✅ autonomia · ✅ injection |
-| [S-04](S-04-fila-de-aprovacao.md) | Fila de aprovação | A pausa, a tela da Neuza, o Espelho de Condição | ◐ parcial — fila, Espelho e tela sim; a notificação por WhatsApp não | |
-| [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ◐ parcial — a operação e o portão sim; a rotina periódica não | ✅ concorrência — **existe** |
+| [S-04](S-04-fila-de-aprovacao.md) | Fila de aprovação | A pausa, a tela da Neuza, o Espelho de Condição | ✔ pronta — fila, Espelho, tela, notificação e escalonamento | |
+| [S-05](S-05-reserva-de-chassi.md) | Reserva de chassi | A operação que não pode falhar | ✔ pronta — a operação, o portão e a rotina de 5 min | ✅ concorrência — **existe** |
 | [S-06](S-06-handoff-whatsapp.md) | Handoff WhatsApp | Token, webhook, continuidade | ◐ parcial — §1 a §7 sim; o backoff da §8 espera a fila do worker | |
 | [S-07](S-07-test-drive.md) | Test drive | Agenda real, dossiê do vendedor, **desfecho** | ◐ parcial — agenda sim; §6, §8 e §9 não | |
 | [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo, teto e as duas telas sim; Langfuse não | |

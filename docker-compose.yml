@@ -57,6 +57,12 @@ services:
       CACHE_REDIS_ENABLED: "false"
       CACHE_LOCAL_ENABLED: "true"
     ports: ["8080:8080"]
+    # Em dev o `subir-dev.sh` roda o uvicorn FORA do compose, no host. Sem esta linha,
+    # `localhost` dentro do container é o próprio container, e o webhook da S-06 nunca
+    # chega na API — o sintoma é "a Aurora não responde no WhatsApp" sem erro nenhum.
+    # No perfil `prod` a api sobe no compose e o destino vira `http://api:8000`.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # A sessão do WhatsApp. Perder este volume é ler o QR code de novo (S-10 §5).
       - evolution_instancias:/evolution/instances

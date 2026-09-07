@@ -47,7 +47,12 @@ jobs:
       - run: uv run mypy app
 
       - name: Migrations sobem e descem
-        run: uv run alembic upgrade head && uv run alembic downgrade base && uv run alembic upgrade head
+        # Num banco descartável, nunca no `evsales`. Aqui o runner é limpo e daria na
+        # mesma; o script existe para que o comando do CI e o da máquina de quem
+        # desenvolve sejam o MESMO — foi rodando isto à mão no banco errado que eu
+        # derrubei um ambiente de desenvolvimento.
+        working-directory: .
+        run: ./scripts/conferir-migrations.sh
 
       # Os portões primeiro: se um deles cai, é a primeira linha vermelha do relatório.
       - name: "Portão — concorrência de reserva (S-05)"

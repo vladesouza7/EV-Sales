@@ -72,9 +72,22 @@ ORIENTACAO_POR_ETAPA = {
     "encerrada": "A conversa terminou.",
 }
 
-# ponytail: uma instância de módulo. O provedor não guarda estado por conversa, e trocar
-# por injeção de dependência só teria valor quando houvesse mais de uma implementação.
-PROVEDOR: ProvedorLLM = ProvedorCompativel()
+# S-12 §6 — o provedor é montado **por turno**, a partir da configuração em uso. Uma
+# instância de módulo lida no import faria a troca na tela só valer depois de reiniciar a
+# API, que é exatamente o passo que a S-12 existe para eliminar.
+#
+# `PROVEDOR` continua existindo como **o** ponto de substituição: a suíte inteira troca ele
+# por um dublê (`conftest`, fixture autouse), e `provedor_atual` respeita a troca. Mover
+# essa costura sem manter um ponto único faria 273 testes falarem com a rede de verdade.
+PROVEDOR: ProvedorLLM | None = None
+
+
+def provedor_atual(sessao: Session) -> ProvedorLLM:
+    if PROVEDOR is not None:
+        return PROVEDOR
+    from app.configuracao import ambiente
+
+    return ProvedorCompativel(ambiente(sessao))
 
 
 def verificar_numeros(texto: str, permitidos: set[tuple[str, float]], do_cliente: str) -> Veredito:
@@ -271,7 +284,8 @@ async def executar_turno(
             yield evento
         return
 
-    if not PROVEDOR.configurado():
+    provedor = provedor_atual(sessao)
+    if not provedor.configurado():
         logger.error("provedor de LLM não configurado (ADR-012): turno degradado para humano")
         for evento in _degradar(sessao, conversa, entrada, "provedor_nao_configurado", comeco):
             yield evento
@@ -298,7 +312,7 @@ async def executar_turno(
         # o que já consultou, que é o que "encerra o turno com o que tem" quer dizer.
         oferecidas = esquemas(conversa.etapa) if chamadas < MAX_TOOL_CALLS else []
         try:
-            resposta = await PROVEDOR.conversar(mensagens, oferecidas)
+            resposta = await provedor.conversar(mensagens, oferecidas)
         except ProvedorIndisponivel:
             for evento in _degradar(sessao, conversa, entrada, "provedor_indisponivel", comeco):
                 yield evento
@@ -381,7 +395,7 @@ async def executar_turno(
         # nenhuma prosa. Uma última passada sem tools encerra o turno com o que tem,
         # em vez de entregar mensagem em branco ao cliente.
         try:
-            resposta = await PROVEDOR.conversar(mensagens, [])
+            resposta = await provedor.conversar(mensagens, [])
         except ProvedorIndisponivel:
             for evento in _degradar(sessao, conversa, entrada, "provedor_indisponivel", comeco):
                 yield evento
@@ -412,7 +426,7 @@ async def executar_turno(
             }
         )
         try:
-            resposta = await PROVEDOR.conversar(mensagens, [])
+            resposta = await provedor.conversar(mensagens, [])
         except ProvedorIndisponivel:
             for evento in _degradar(sessao, conversa, entrada, "provedor_indisponivel", comeco):
                 yield evento

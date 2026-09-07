@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configurações — Sol &amp; Volt Veículos Elétricos</title>
+  <link rel="stylesheet" href="/static/estilo.css" />
+  <script src="/static/tema.js"></script>
+</head>
+
+<body>
+  <header class="wrap nav">
+    <a class="marca" href="/configuracoes">
+      <span class="marca-simbolo">⚡</span>
+      <span>
+        <b>Configurações</b>
+        <small>WhatsApp, provedor e quem recebe aviso</small>
+      </span>
+    </a>
+    <span class="acoes">
+      <a class="humano" href="/custo">custo</a>
+      <a class="humano" href="/atendimentos">atendimentos</a>
+      <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
+      <button class="humano" type="button" id="sair">sair</button>
+    </span>
+  </header>
+
+  <main class="wrap" id="tela">
+    <form class="bloco" data-grupo="whatsapp">
+      <h2>WhatsApp da loja</h2>
+      <div class="campos"></div>
+      <p class="detalhe" data-recado></p>
+      <button class="principal" type="submit">Testar e salvar</button>
+    </form>
+
+    <form class="bloco" data-grupo="llm">
+      <h2>Provedor da Aurora</h2>
+      <div class="campos"></div>
+      <p class="detalhe" data-recado></p>
+      <button class="principal" type="submit">Testar e salvar</button>
+    </form>
+
+    <form class="bloco" data-grupo="telefones">
+      <h2>Quem recebe aviso</h2>
+      <p class="detalhe">
+        Telefone aqui é mascarado sempre — esta tela nunca mostra número completo. Deixe em
+        branco para não mudar.
+      </p>
+      <div class="campos"></div>
+      <p class="detalhe" data-recado></p>
+      <button class="principal" type="submit">Salvar</button>
+    </form>
+  </main>
+
+  <script>
+    // S-12 §2 — o rótulo e o grupo de cada chave. A ordem aqui é a ordem da tela.
+    var CHAVES = {
+      whatsapp_numero: { grupo: "whatsapp", rotulo: "Número da loja", dica: "+55 83 99157-5299" },
+      evolution_url: { grupo: "whatsapp", rotulo: "URL da Evolution", dica: "https://…" },
+      evolution_instancia: { grupo: "whatsapp", rotulo: "Instância", dica: "solevolt" },
+      evolution_chave: { grupo: "whatsapp", rotulo: "Chave da Evolution" },
+      llm_provedor: { grupo: "llm", rotulo: "Provedor", lista: true },
+      llm_modelo: { grupo: "llm", rotulo: "Modelo", dica: "id exato, com versão" },
+      llm_url: { grupo: "llm", rotulo: "URL", dica: "obrigatória no provedor 'compativel'" },
+      llm_chave: { grupo: "llm", rotulo: "Chave do provedor" },
+      llm_fallbacks: { grupo: "llm", rotulo: "Fallbacks", dica: "só o openrouter entende" }
+    };
+
+    var estado = null;
+
+    function irParaLogin() {
+      location.href = "/entrar?destino=" + encodeURIComponent(location.pathname);
+    }
+
+    function campo(info, molde) {
+      var linha = document.createElement("label");
+      linha.className = "campo";
+      linha.dataset.chave = info.chave;
+
+      var titulo = document.createElement("span");
+      titulo.textContent = molde.rotulo;
+      linha.appendChild(titulo);
+
+      var entrada;
+      if (molde.lista) {
+        entrada = document.createElement("select");
+        estado.provedores.forEach(function (nome) {
+          var opcao = document.createElement("option");
+          opcao.value = nome;
+          opcao.textContent = nome;
+          opcao.selected = nome === info.resumo;
+          entrada.appendChild(opcao);
+        });
+      } else {
+        entrada = document.createElement("input");
+        entrada.type = "text";
+        // Segredo nunca chega preenchido: o campo é para trocar, não para consultar.
+        entrada.value = info.sigilosa ? "" : info.resumo;
+        entrada.placeholder = info.sigilosa
+          ? (info.resumo || "não cadastrada") + " — digite para trocar"
+          : (molde.dica || "");
+      }
+      entrada.name = info.chave;
+      linha.appendChild(entrada);
+
+      var origem = document.createElement("small");
+      origem.textContent = info.fonte === "banco" ? "salvo aqui"
+        : info.fonte === ".env" ? "vindo do .env"
+          : "não configurado";
+      if (info.divergente) {
+        // O que sobrou no arquivo é uma credencial antiga, viva, num arquivo do servidor.
+        origem.textContent += " · há outro valor no .env, esvazie aquela linha";
+        origem.style.color = "var(--erro)";
+      }
+      linha.appendChild(origem);
+      return linha;
+    }
+
+    function pessoa(quem) {
+      var linha = document.createElement("label");
+      linha.className = "campo";
+      var titulo = document.createElement("span");
+      titulo.textContent = quem.nome + " · " + quem.papel;
+      var entrada = document.createElement("input");
+      entrada.type = "text";
+      entrada.name = quem.id;
+      entrada.dataset.papel = quem.papel;
+      entrada.placeholder = quem.telefone || "sem telefone cadastrado";
+      linha.appendChild(titulo);
+      linha.appendChild(entrada);
+      return linha;
+    }
+
+    function recado(grupo, texto, erro) {
+      var alvo = document.querySelector('[data-grupo="' + grupo + '"] [data-recado]');
+      alvo.textContent = texto;
+      alvo.style.color = erro ? "var(--erro)" : "";
+    }
+
+    async function carregar() {
+      var resposta = await fetch("/api/configuracoes");
+      if (resposta.status === 401) { irParaLogin(); return; }
+      if (resposta.status === 404) {
+        document.getElementById("tela").innerHTML =
+          "<p>Só o dono alcança as configurações.</p>";
+        return;
+      }
+      estado = await resposta.json();
+
+      document.querySelectorAll("[data-grupo] .campos").forEach(function (caixa) {
+        caixa.innerHTML = "";
+      });
+      estado.chaves.forEach(function (info) {
+        var molde = CHAVES[info.chave];
+        if (!molde) return;
+        document
+          .querySelector('[data-grupo="' + molde.grupo + '"] .campos')
+          .appendChild(campo(info, molde));
+      });
+      var caixa = document.querySelector('[data-grupo="telefones"] .campos');
+      estado.telefones.forEach(function (quem) { caixa.appendChild(pessoa(quem)); });
+    }
+
+    async function salvarChaves(formulario, grupo) {
+      var valores = {};
+      formulario.querySelectorAll("input, select").forEach(function (entrada) {
+        if (entrada.value.trim()) valores[entrada.name] = entrada.value.trim();
+      });
+      recado(grupo, "Testando…", false);
+
+      var resposta = await fetch("/api/configuracoes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ valores: valores })
+      });
+      if (resposta.status === 401) { irParaLogin(); return; }
+      var corpo = await resposta.json();
+      if (!resposta.ok) {
+        recado(grupo, (corpo.detail && corpo.detail.mensagem) || "Não deu para salvar.", true);
+        return;
+      }
+      recado(grupo, corpo.aviso || "Salvo.", Boolean(corpo.aviso));
+      await carregar();
+    }
+
+    async function salvarTelefones(formulario) {
+      var corpo = { usuarios: {}, vendedores: {} };
+      formulario.querySelectorAll("input").forEach(function (entrada) {
+        if (!entrada.value.trim()) return;
+        var onde = entrada.dataset.papel === "vendedor" ? "vendedores" : "usuarios";
+        corpo[onde][entrada.name] = entrada.value.trim();
+      });
+      recado("telefones", "Salvando…", false);
+
+      var resposta = await fetch("/api/configuracoes/telefones", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(corpo)
+      });
+      if (resposta.status === 401) { irParaLogin(); return; }
+      var dados = await resposta.json();
+      if (!resposta.ok) {
+        recado("telefones", (dados.detail && dados.detail.mensagem) || "Não deu.", true);
+        return;
+      }
+      recado("telefones", "Salvo.", false);
+      await carregar();
+    }
+
+    document.querySelectorAll("form[data-grupo]").forEach(function (formulario) {
+      formulario.addEventListener("submit", function (evento) {
+        evento.preventDefault();
+        var grupo = formulario.dataset.grupo;
+        if (grupo === "telefones") salvarTelefones(formulario);
+        else salvarChaves(formulario, grupo);
+      });
+    });
+
+    document.getElementById("sair").addEventListener("click", async function () {
+      await fetch("/api/sair", { method: "POST" });
+      location.href = "/entrar";
+    });
+
+    carregar();
+  </script>
+</body>
+
+</html>

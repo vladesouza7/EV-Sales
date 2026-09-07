@@ -18,11 +18,12 @@ from app.arquivos import NomeInvalido, caminho_da_foto, ler
 from app.atendimentos import router as rotas_de_atendimento
 from app.autenticacao import Autenticado
 from app.autenticacao import router as rotas_de_autenticacao
+from app.configuracoes import router as rotas_de_configuracao
 from app.conversas import router as rotas_de_conversa
 from app.core.pii import decifrar
 from app.db import agora, obter_sessao
 from app.ia.tools.estoque import buscar_unidades
-from app.ia.turno import PROVEDOR
+from app.ia.turno import provedor_atual
 from app.leads import LeadEntrada, abrir_conversa, gravar_cookie
 from app.modelos import Conversa, Lead, PedidoDeAprovacao
 from app.observabilidade import registrar
@@ -39,6 +40,7 @@ app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 app.include_router(rotas_de_autenticacao)
 app.include_router(rotas_de_aprovacao)
 app.include_router(rotas_de_atendimento)
+app.include_router(rotas_de_configuracao)
 app.include_router(rotas_de_conversa)
 app.include_router(rotas_de_test_drive)
 
@@ -143,8 +145,11 @@ def saude_das_dependencias(sessao: BancoDeDados, resposta: Response) -> dict[str
     Só o Postgres derruba o readiness: sem provedor a Aurora degrada para atendimento
     humano, que é operação reduzida e não indisponibilidade.
     """
-    nome = getattr(PROVEDOR, "nome", "?")
-    situacao = "configurado" if PROVEDOR.configurado() else "nao_configurado"
+    # Lê o provedor efetivo, não o do import: depois da S-12 a configuração pode ter
+    # mudado sem reinício, e um readiness que responde pelo valor antigo mente.
+    provedor = provedor_atual(sessao)
+    nome = getattr(provedor, "nome", "?")
+    situacao = "configurado" if provedor.configurado() else "nao_configurado"
     estado = {"llm": f"{nome}: {situacao}"}
     try:
         sessao.execute(text("SELECT 1"))
@@ -164,6 +169,12 @@ def pagina_de_atendimentos() -> FileResponse:
 @app.get("/custo", include_in_schema=False)
 def pagina_de_custo() -> FileResponse:
     return FileResponse(FRONTEND / "custo.html")
+
+
+@app.get("/configuracoes", include_in_schema=False)
+def pagina_de_configuracoes() -> FileResponse:
+    """Pública como as outras: o que ela mostra é que não é (S-12 §1)."""
+    return FileResponse(FRONTEND / "configuracoes.html")
 
 
 @app.get("/entrar", include_in_schema=False)

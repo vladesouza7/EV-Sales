@@ -58,7 +58,7 @@ passam a existir.
 | [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem, máscara e a varredura sim; retenção não | ✅ varredura de logs — **existe** |
 | [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose, seed e o CI sim; backup e runbook não | |
 | [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ◐ parcial — login, sessão e perfis sim; as telas são da S-04 e da S-08 | |
-| [S-12](S-12-configuracoes.md) | Configurações | Credencial e número sem `ssh`, cifrados | ✗ não começada — spec escrita, aguardando revisão | |
+| [S-12](S-12-configuracoes.md) | Configurações | Credencial e número sem `ssh`, cifrados | ◐ parcial — tela, rotas e leitor sim; o estado da instância na tela não | |
 
 Os cinco ✅ são os portões que **reprovam o build**. Eles existem porque risco sem verificação
 automatizada é desejo, não requisito: enquanto o eval não bloqueia o merge, o ADR envelhece em

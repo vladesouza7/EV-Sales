@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.autenticacao import criar_usuario
-from app.modelos import Conversa, Incidente, Lead, Trilha
+from app.modelos import Conversa, Incidente, Lead, Trilha, Usuario
 
 from .test_conversas import _turno  # o mesmo turno da S-02; duplicar seria uma segunda verdade
 
@@ -98,6 +98,20 @@ def test_atendimento_completo_nao_deixa_pii_em_claro(
         "/api/entrar", json={"email": "neuza@solevolt.com.br", "senha": "senha-de-teste-12"}
     )
     cliente.get(f"/api/leads/{lead.id}/telefone")
+
+    # S-12 §7 — cadastrar quem recebe aviso é escrita de PII, e entra na varredura.
+    criar_usuario(
+        sessao,
+        nome="Raí Sol",
+        email="rai@solevolt.com.br",
+        senha="senha-de-teste-12",
+        perfil="dono",
+    )
+    cliente.post("/api/entrar", json={"email": "rai@solevolt.com.br", "senha": "senha-de-teste-12"})
+    neuza = sessao.scalars(select(Usuario).where(Usuario.perfil == "gerente")).one()
+    cliente.put(
+        "/api/configuracoes/telefones", json={"usuarios": {str(neuza.id): TELEFONE}}
+    )
 
     assert _vazamentos(caplog.text) == [], "PII em claro no log da aplicação"
 

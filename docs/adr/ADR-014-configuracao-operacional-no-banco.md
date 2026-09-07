@@ -41,10 +41,12 @@ o banco vence.**
 
 ### 1. A chave fechada — o que impede a tela de virar um `settings` genérico
 
-`configuracoes` é `(chave, valor_cifrado, atualizado_em, atualizado_por)`, e **`chave` é um
-`Enum` fechado no código**. Chave nova exige commit, migration não — mas exige commit, e é isso que
-importa: sem essa restrição, a tela é o lugar onde alguém, um dia, cadastra `preco_do_seal` e
-contorna a invariante 1 por um formulário.
+`configuracoes` é `(chave, valor_cifrado, atualizado_em, atualizado_por)`, e **`chave` é um `Enum`
+fechado no código e um `CHECK` no banco**. Chave nova exige commit **e** migration.
+
+Ficar só no `Enum` seria deixar a garantia onde ela some no diff. A regra desta casa é a inversa —
+"o código decide o que pode ser feito" —, e aqui ela custa uma linha: sem a constraint, a tela é o
+lugar onde alguém, um dia, cadastra `preco_do_seal` e contorna a invariante 1 por um formulário.
 
 O que entra:
 

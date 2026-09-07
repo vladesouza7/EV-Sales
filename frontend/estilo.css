@@ -406,3 +406,20 @@ input[type="date"] { color-scheme: light dark; }
 .grafico { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding: 12px 0 40px; }
 .grafico span { flex: 1; background: var(--cyan); border-radius: 3px 3px 0 0; opacity: .75; min-height: 2px; }
 .grafico span:hover { opacity: 1; }
+
+/* ── S-12 · configurações ────────────────────────────────────────────────────── */
+
+.bloco {
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px 18px 20px; margin: 18px 0;
+}
+.bloco h2 { margin: 0 0 4px; font-size: 1.05rem; letter-spacing: -.03em; }
+.campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; padding: 12px 0 4px; }
+.campo { margin: 0; }
+.campo span { display: block; margin-bottom: 6px; }
+.campo small { display: block; color: var(--muted); font-size: .72rem; margin-top: 4px; }
+.bloco select {
+  width: 100%; padding: 12px; border-radius: 12px; font: inherit;
+  background: var(--bg-secondary); color: var(--ink); border: 1px solid var(--line);
+}
+.bloco .principal { width: auto; padding: 12px 20px; margin-top: 8px; }

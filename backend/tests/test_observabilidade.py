@@ -179,11 +179,22 @@ def test_a_mensagem_do_teto_nao_e_gravada_como_gerada_por_ia(
     assert saida.gerada_por_ia is False
 
 
-def test_saude_responde_com_o_estado_das_dependencias(cliente: TestClient) -> None:
+def test_saude_responde_com_o_estado_das_dependencias(
+    cliente: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     assert cliente.get("/health").json() == {"status": "ok"}
+
+    # Sem o dublê: o readiness lê a configuração em uso (S-12 §6). Sem chave no ambiente de
+    # teste ele diz isso, em vez de fingir que está de pé, e diz **qual** provedor está
+    # ligado — que com o ADR-012 é informação de operação.
+    monkeypatch.setattr("app.ia.turno.PROVEDOR", None)
     pronto = cliente.get("/health/ready")
     assert pronto.status_code == 200
     assert pronto.json()["postgres"] == "ok"
-    # Sem chave no ambiente de teste: o readiness diz isso em vez de fingir que está de pé,
-    # e diz **qual** provedor está ligado, que com o ADR-012 é informação de operação.
     assert pronto.json()["llm"] == "openrouter: nao_configurado"
+
+
+def test_readiness_responde_pelo_provedor_que_o_turno_usaria(cliente: TestClient) -> None:
+    """Antes da S-12 o readiness lia o objeto do import e o turno lia outro. Um readiness
+    que responde por um provedor que ninguém usa é pior do que nenhum."""
+    assert cliente.get("/health/ready").json()["llm"] == "duble: configurado"

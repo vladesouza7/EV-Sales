@@ -28,6 +28,7 @@ import logging
 import os
 import urllib.error
 import urllib.request
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -158,21 +159,26 @@ def _dolar_em_micro_reais() -> int:
 class ProvedorCompativel:
     """Qualquer provedor que fale o protocolo da OpenAI (ADR-012).
 
-    Ler o `.env` no construtor, e não no módulo, é o que deixa o teste trocar a
+    Ler a configuração no construtor, e não no módulo, é o que deixa o teste trocar a
     configuração sem reimportar nada.
+
+    `fonte` é qualquer mapa de nome de variável para valor. O padrão é o `os.environ`; a
+    S-12 passa o mapa em que o banco já venceu o `.env` (`app.configuracao.ambiente`). É
+    por isso que a precedência do ADR-014 entra sem reescrever nada aqui.
     """
 
-    def __init__(self) -> None:
-        self.nome = os.environ.get(VARIAVEL_PROVEDOR, PROVEDOR_PADRAO)
+    def __init__(self, fonte: Mapping[str, str] | None = None) -> None:
+        fonte = os.environ if fonte is None else fonte
+        self.nome = fonte.get(VARIAVEL_PROVEDOR, PROVEDOR_PADRAO)
         self.conhecido = self.nome in PRESETS
         self.preset = PRESETS.get(self.nome, _DESCONHECIDO)
-        self.chave = os.environ.get(VARIAVEL_CHAVE, "")
-        self.modelo = os.environ.get(VARIAVEL_MODELO, "")
+        self.chave = fonte.get(VARIAVEL_CHAVE, "")
+        self.modelo = fonte.get(VARIAVEL_MODELO, "")
         self.fallbacks = [
-            m.strip() for m in os.environ.get(VARIAVEL_FALLBACKS, "").split(",") if m.strip()
+            m.strip() for m in fonte.get(VARIAVEL_FALLBACKS, "").split(",") if m.strip()
         ]
-        # A URL do `.env` vence o preset: é como o Ollama roda com outro host no compose.
-        self.base = (os.environ.get(VARIAVEL_URL, "") or self.preset.base).rstrip("/")
+        # A URL configurada vence o preset: é como o Ollama roda com outro host no compose.
+        self.base = (fonte.get(VARIAVEL_URL, "") or self.preset.base).rstrip("/")
         self.url = _endpoint(self.base)
 
     def configurado(self) -> bool:

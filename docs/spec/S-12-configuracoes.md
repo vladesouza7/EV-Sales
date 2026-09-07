@@ -3,19 +3,19 @@
 **Depende de:** [S-11](S-11-autenticacao-e-perfis.md) (o perfil `dono` e o recorte por rota)
 **Bloqueia:** [S-06](S-06-handoff-whatsapp.md) — é aqui que o número e a chave da Evolution passam a existir
 **Decide por:** [ADR-014](../adr/ADR-014-configuracao-operacional-no-banco.md), [ADR-007](../adr/ADR-007-pii-cifrada-e-mascarada.md), [ADR-012](../adr/ADR-012-provedor-configuravel.md)
-**Estado:** ✗ não começada — spec escrita a pedido do analista, antes do código
+**Estado:** ✔ implementada — 19 testes; a tela, as rotas, o leitor único e a migration
 
 | § | O quê | Estado |
 |---|---|---|
-| §1 | Quem entra | ✗ |
-| §2 | As nove chaves, e a validação de cada uma | ✗ |
-| §3 | Quem recebe aviso — telefone de pessoa, que não mora aqui | ✗ |
-| §4 | O segredo não volta pela tela | ✗ |
-| §5 | Gravar testa antes, e o estado da instância | ✗ |
-| §6 | Precedência, cache e quando a troca passa a valer | ✗ |
-| §7 | Rastro | ✗ |
-| §8 | O que esta tela nunca configura | ✗ |
-| §9 | A tela | ✗ |
+| §1 | Quem entra | ✔ |
+| §2 | As nove chaves, e a validação de cada uma | ✔ |
+| §3 | Quem recebe aviso — telefone de pessoa, que não mora aqui | ✔ |
+| §4 | O segredo não volta pela tela | ✔ |
+| §5 | Gravar testa antes, e o estado da instância | ◐ — a sonda sim; o estado na tela não |
+| §6 | Precedência, cache e quando a troca passa a valer | ✔ |
+| §7 | Rastro | ✔ |
+| §8 | O que esta tela nunca configura | ✔ |
+| §9 | A tela | ✔ |
 
 ---
 

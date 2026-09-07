@@ -351,6 +351,10 @@ class Usuario(Base):
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
     senha_trocada_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    # S-12 §3 — para onde vai a notificação da S-04 §3 e o alerta da S-08 §3. Mora aqui,
+    # e não em `configuracoes`, porque é telefone de pessoa: uma segunda cópia seria a que
+    # a retenção da S-09 §6 esquece de apagar. Nulo para quem não quer receber nada.
+    telefone_cifrado: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
     tentativas_falhas: Mapped[int] = mapped_column(Integer, default=0)
     bloqueado_ate: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
@@ -520,3 +524,40 @@ class Reserva(Base):
     expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     liberada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     motivo_liberacao: Mapped[str | None] = mapped_column(String(30), default=None)
+
+
+class Configuracao(Base):
+    """S-12 §2 e ADR-014 — o que a Sol & Volt troca sem abrir terminal.
+
+    `chave` é `String` no banco e `Chave` (Enum) no código: o banco guarda o texto, e quem
+    fecha a lista é `app/configuracao.py`. Chave nova exige commit — sem isso, esta tabela
+    é a porta lateral por onde alguém, um dia, cadastra `preco_do_seal` e contorna a
+    invariante 1 por um formulário.
+
+    **Todo valor é cifrado, inclusive os que não são segredo.** Um caminho só, sem uma
+    coluna `e_segredo` para alguém esquecer de marcar na chave seguinte. O custo é não
+    poder consultar por valor, e nada aqui precisa disso.
+    """
+
+    __tablename__ = "configuracoes"
+    __table_args__ = (
+        # A lista fechada é do banco, não só do `Enum` em Python: o `create_all` do banco de
+        # teste cria o mesmo CHECK que a migration, senão a garantia só existiria em produção.
+        CheckConstraint(
+            "chave IN ('whatsapp_numero', 'evolution_url', 'evolution_instancia', "
+            "'evolution_chave', 'llm_provedor', 'llm_modelo', 'llm_url', 'llm_chave', "
+            "'llm_fallbacks')",
+            name="ck_configuracoes_chave_conhecida",
+        ),
+    )
+
+    chave: Mapped[str] = mapped_column(String(40), primary_key=True)
+    valor_cifrado: Mapped[bytes] = mapped_column(LargeBinary)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    atualizado_por: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="RESTRICT"), default=None
+    )
+
+    def __repr__(self) -> str:
+        """Sem o valor, nem mascarado: metade desta tabela é credencial."""
+        return f"<Configuracao {self.chave}>"

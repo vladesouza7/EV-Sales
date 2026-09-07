@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app.configuracao import esquecer  # noqa: E402
 from app.db import Base, engine  # noqa: E402
 from app.ia import turno as modulo_turno  # noqa: E402
 from app.limite import limpar_limites  # noqa: E402
@@ -43,6 +44,7 @@ def _schema() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def _banco_limpo() -> Iterator[None]:
     limpar_limites()
+    esquecer()
     with Session(engine) as sessao:
         for tabela in reversed(Base.metadata.sorted_tables):
             sessao.execute(tabela.delete())

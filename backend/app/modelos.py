@@ -161,6 +161,15 @@ class Mensagem(Base):
             name="ck_mensagens_saida_nunca_pendente",
         ),
         Index("ix_mensagens_conversa_criada", "conversa_id", "criada_em"),
+        # S-06 §4.1 — a deduplicação é do banco. A Evolution entrega *at-least-once*, e
+        # um `SELECT` antes do `INSERT` reabre a janela para o turno duplicado, que é o
+        # mesmo erro que a invariante 4 proíbe na reserva.
+        Index(
+            "ux_mensagens_whatsapp_id",
+            "whatsapp_message_id",
+            unique=True,
+            postgresql_where=literal_column("whatsapp_message_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -561,3 +570,29 @@ class Configuracao(Base):
     def __repr__(self) -> str:
         """Sem o valor, nem mascarado: metade desta tabela é credencial."""
         return f"<Configuracao {self.chave}>"
+
+
+class TokenMigracao(Base):
+    """S-06 §2 — o que amarra a conversa do WhatsApp à sessão do chat web.
+
+    Uso único e 30 minutos. O alfabeto não tem `O`, `0`, `I` nem `1`: o cliente lê o
+    código na tela e digita — ou deixa o `wa.me` preencher — e a confusão entre esses
+    quatro é a que acontece de verdade.
+
+    `telefone_hash_esperado` é quem pediu a migração. Não é usado para recusar (o cliente
+    pode ter cadastrado um número e escrito de outro), mas é o que permite ver depois que
+    um token foi resgatado por outra pessoa.
+    """
+
+    __tablename__ = "tokens_migracao"
+
+    token: Mapped[str] = mapped_column(String(6), primary_key=True)
+    conversa_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversas.id", ondelete="CASCADE"))
+    telefone_hash_esperado: Mapped[str | None] = mapped_column(String(64), default=None)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    usado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+    def __repr__(self) -> str:
+        """Sem o token: ele é credencial de sessão enquanto não for usado."""
+        return f"<TokenMigracao conversa={self.conversa_id} usado={self.usado_em is not None}>"

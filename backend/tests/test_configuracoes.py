@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app import configuracoes as modulo
 from app.autenticacao import criar_usuario
 from app.configuracao import Chave, ambiente, gravar, valor
+from app.core import http
 from app.ia.turno import provedor_atual
 from app.modelos import Trilha, Usuario
 
@@ -48,7 +49,7 @@ def _salvar(cliente: TestClient, **valores: str) -> object:
 @pytest.fixture
 def sonda_aprova(monkeypatch: pytest.MonkeyPatch) -> None:
     """Nenhum teste fala com a rede. A sonda de verdade tem os testes dela, abaixo."""
-    monkeypatch.setattr(modulo, "_buscar", lambda *_, **__: 200)
+    monkeypatch.setattr(modulo, "buscar", lambda *_, **__: 200)
 
 
 @pytest.fixture
@@ -149,7 +150,7 @@ def test_credencial_recusada_nao_grava(
     completa: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(modulo, "_buscar", lambda *_, **__: 401)
+    monkeypatch.setattr(modulo, "buscar", lambda *_, **__: 401)
     _entrar(cliente, rai)
 
     assert _salvar(cliente, llm_chave=CHAVE_FALSA).status_code == 422  # type: ignore[attr-defined]
@@ -164,7 +165,7 @@ def test_provedor_fora_do_ar_nao_tranca_a_tela(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Tratar indisponibilidade como recusa travaria a tela na hora de trocar de provedor."""
-    monkeypatch.setattr(modulo, "_buscar", lambda *_, **__: 503)
+    monkeypatch.setattr(modulo, "buscar", lambda *_, **__: 503)
     _entrar(cliente, rai)
 
     resposta = _salvar(cliente, llm_chave=CHAVE_FALSA)
@@ -181,9 +182,9 @@ def test_rede_fora_tambem_grava(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def cair(*_: object, **__: object) -> int:
-        raise modulo.Indisponivel("DNS")
+        raise http.Indisponivel("DNS")
 
-    monkeypatch.setattr(modulo, "_buscar", cair)
+    monkeypatch.setattr(modulo, "buscar", cair)
     _entrar(cliente, rai)
 
     assert _salvar(cliente, llm_chave=CHAVE_FALSA).status_code == 200  # type: ignore[attr-defined]
@@ -202,7 +203,7 @@ def test_a_sonda_da_evolution_valida_a_chave_e_nao_a_instancia(
         visitadas.append(url)
         return 200
 
-    monkeypatch.setattr(modulo, "_buscar", anotar)
+    monkeypatch.setattr(modulo, "buscar", anotar)
     _entrar(cliente, rai)
 
     cliente.put(
@@ -221,12 +222,12 @@ def test_a_sonda_da_evolution_valida_a_chave_e_nao_a_instancia(
 def test_a_sonda_nao_segue_redirecionamento() -> None:
     """É assim que uma URL externa vira interna (S-12 §5)."""
     redirecionadores = [
-        m for m in modulo._abridor().handlers
+        m for m in http.abridor().handlers
         if isinstance(m, urllib.request.HTTPRedirectHandler)
     ]
     assert redirecionadores, "sem handler nenhum o urllib reinstala o padrão"
-    assert all(isinstance(m, modulo._SemRedirecionamento) for m in redirecionadores)
-    assert modulo._SemRedirecionamento().redirect_request() is None
+    assert all(isinstance(m, http.SemRedirecionamento) for m in redirecionadores)
+    assert http.SemRedirecionamento().redirect_request() is None
 
 
 def test_redirecionamento_conta_como_recusa(
@@ -236,7 +237,7 @@ def test_redirecionamento_conta_como_recusa(
     completa: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(modulo, "_buscar", lambda *_, **__: 302)
+    monkeypatch.setattr(modulo, "buscar", lambda *_, **__: 302)
     _entrar(cliente, rai)
 
     assert _salvar(cliente, llm_chave=CHAVE_FALSA).status_code == 422  # type: ignore[attr-defined]
@@ -247,7 +248,7 @@ def test_a_sonda_nao_devolve_o_corpo_do_destino(
     cliente: TestClient, rai: Usuario, completa: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Devolver o corpo faria da tela um leitor de qualquer endereço que o servidor alcança."""
-    monkeypatch.setattr(modulo, "_buscar", lambda *_, **__: 401)
+    monkeypatch.setattr(modulo, "buscar", lambda *_, **__: 401)
     _entrar(cliente, rai)
 
     corpo = cliente.post(

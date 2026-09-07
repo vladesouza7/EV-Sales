@@ -77,6 +77,9 @@ def retomar(conversa: ConversaAberta, sessao: BancoDeDados) -> dict[str, object]
         "conversa_id": str(conversa.id),
         "etapa": conversa.etapa,
         "modo": conversa.modo,
+        # S-06 §5 — a aba web precisa saber que perdeu a vez, senão o cliente digita e
+        # descobre no 409.
+        "canal_atual": conversa.canal_atual,
         "mensagens": [
             {
                 "id": str(m.id),
@@ -95,6 +98,13 @@ def retomar(conversa: ConversaAberta, sessao: BancoDeDados) -> dict[str, object]
 def enviar(
     entrada: MensagemEntrada, conversa: ConversaAberta, sessao: BancoDeDados
 ) -> dict[str, object]:
+    if conversa.canal_atual == "whatsapp":
+        # S-06 §5 — duas janelas ativas na mesma conversa gerariam turnos concorrentes e
+        # respostas duplicadas. Quem assumiu foi o WhatsApp; a aba web vira leitura.
+        raise HTTPException(
+            409, detail={"mensagem": "Esta conversa continua no WhatsApp."}
+        )
+
     conteudo = entrada.conteudo.strip()
     if not conteudo:
         raise HTTPException(400, detail={"mensagem": "Escreve alguma coisa que eu te respondo."})

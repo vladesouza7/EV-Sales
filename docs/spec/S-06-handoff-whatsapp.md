@@ -1,7 +1,26 @@
 # S-06 — Handoff para o WhatsApp e continuidade da conversa
 
-**Depende de:** [S-02](S-02-chat-web-e-sessao.md)
+**Depende de:** [S-02](S-02-chat-web-e-sessao.md), [S-12](S-12-configuracoes.md) (o número e a chave)
 **Decide por:** [ADR-005](../adr/ADR-005-handoff-whatsapp-por-wa-me.md)
+**Estado:** ◐ parcial — §1 a §7 sim; a retentativa com backoff da §8 espera a fila do worker
+
+| § | O quê | Estado |
+|---|---|---|
+| §1 | Quando a Aurora oferece | ◐ o botão, sempre visível; o gatilho por etapa não |
+| §2 | Token de migração | ✔ `tokens_migracao`, 6 caracteres, uso único, 30 min |
+| §3 | O link `wa.me` | ✔ |
+| §4 | Webhook e recepção | ✔ autenticado, deduplicado por índice único, só enfileira |
+| §5 | Continuidade, e a aba web que fecha | ✔ |
+| §6 | Regras de envio | ◐ as três recusas sim; o intervalo de 3 s espera a fila |
+| §7 | Formatação | ✔ |
+| §8 | Falha da Evolution | ◐ incidente sim; as 3 tentativas com backoff não |
+
+> **O token tem 6 caracteres, e os exemplos desta spec mostram `SV-7K2M`, que tem 4.** A §2
+> é o modelo de dados e vence; 32⁶ contra 32⁴ é a diferença entre um código que não se
+> adivinha e um que se adivinha em algumas horas — e adivinhar um token válido é amarrar o
+> próprio número à conversa de outra pessoa. Os exemplos ficam como estão até alguém
+> decidir, porque corrigir o [ADR-005](../adr/ADR-005-handoff-whatsapp-por-wa-me.md) exige
+> revisão humana.
 
 ---
 

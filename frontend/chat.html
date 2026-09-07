@@ -20,6 +20,10 @@
     <div class="acoes">
       <!-- S-02 §5: sempre visível, em toda etapa. Não é saída de emergência escondida. -->
       <button class="humano" type="button" onclick="chamarPessoa()">falar com uma pessoa</button>
+      <!-- S-06 §1: o botão continua visível mesmo depois de o cliente recusar uma vez. -->
+      <button class="humano" type="button" id="ir-pro-zap" onclick="irProWhatsApp()" hidden>
+        continuar no WhatsApp
+      </button>
       <button class="tema" type="button" aria-label="Alternar tema" onclick="alternarTema()"></button>
     </div>
   </header>
@@ -91,6 +95,8 @@
         bolha("aurora", "Oi! Me conta o que você procura que eu já vejo o que temos na loja hoje.");
       }
       if (conversa.modo === "humano") emModoHumano();
+      if (conversa.canal_atual === "whatsapp") migrouParaWhatsApp();
+      else document.getElementById("ir-pro-zap").hidden = false;
       lista.scrollTop = lista.scrollHeight;
       ouvir();
     }
@@ -167,6 +173,26 @@
 
     function emModoHumano() {
       dizer("Avisei o time. Tarcísio ou Jaqueline continuam com você por aqui.");
+    }
+
+    async function irProWhatsApp() {
+      var resposta = await fetch("/api/conversas/" + CONVERSA + "/whatsapp", { method: "POST" });
+      if (!resposta.ok) {
+        dizer("O WhatsApp da loja ainda não está no ar. Pode continuar por aqui.");
+        return;
+      }
+      // O link abre a conversa no aparelho do cliente, com o código já escrito. Quem manda
+      // a primeira mensagem é ele — a loja não manda (ADR-005).
+      location.href = (await resposta.json()).link;
+    }
+
+    function migrouParaWhatsApp() {
+      // S-06 §5 — duas janelas ativas na mesma conversa gerariam turnos concorrentes e
+      // respostas duplicadas. Aqui vira leitura.
+      dizer("Conversa migrada para o WhatsApp. Continue por lá — o histórico foi junto.");
+      document.getElementById("conteudo").disabled = true;
+      document.querySelector(".escrever .enviar").disabled = true;
+      document.getElementById("ir-pro-zap").hidden = true;
     }
 
     carregar();

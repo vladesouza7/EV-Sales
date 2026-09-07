@@ -28,6 +28,7 @@ from app.leads import LeadEntrada, abrir_conversa, gravar_cookie
 from app.modelos import Conversa, Lead, PedidoDeAprovacao
 from app.observabilidade import registrar
 from app.testdrive import router as rotas_de_test_drive
+from app.whatsapp import router as rotas_de_whatsapp
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 
@@ -43,6 +44,7 @@ app.include_router(rotas_de_atendimento)
 app.include_router(rotas_de_configuracao)
 app.include_router(rotas_de_conversa)
 app.include_router(rotas_de_test_drive)
+app.include_router(rotas_de_whatsapp)
 
 BancoDeDados = Annotated[Session, Depends(obter_sessao)]
 

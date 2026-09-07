@@ -14,8 +14,6 @@ Três coisas que este arquivo existe para garantir, e que valem mais que o formu
 
 import json
 import re
-import urllib.error
-import urllib.request
 import uuid
 from dataclasses import dataclass
 from typing import Annotated
@@ -37,6 +35,7 @@ from app.configuracao import (
     limpar,
     valor,
 )
+from app.core.http import Indisponivel, buscar
 from app.core.pii import cifrar, decifrar, mascarar_telefone
 from app.core.validacao import normalizar_telefone
 from app.db import FUSO, obter_sessao
@@ -46,7 +45,6 @@ from app.modelos import Configuracao, Usuario, Vendedor
 router = APIRouter()
 BancoDeDados = Annotated[Session, Depends(obter_sessao)]
 
-TEMPO_LIMITE_S = 5
 _INSTANCIA = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
@@ -60,10 +58,6 @@ class Telefones(BaseModel):
     vendedores: dict[uuid.UUID, str] = {}
 
 
-class Indisponivel(RuntimeError):
-    """O destino não respondeu. Não é o mesmo que ter recusado a credencial."""
-
-
 @dataclass(frozen=True)
 class Veredito:
     grava: bool
@@ -74,38 +68,6 @@ class Veredito:
 # ── a sonda ──────────────────────────────────────────────────────────────────────
 
 
-class _SemRedirecionamento(urllib.request.HTTPRedirectHandler):
-    """Seguir redirecionamento é como uma URL externa vira interna.
-
-    Quem controla o destino responde `302 Location: http://169.254.169.254/…` e a
-    requisição sai da rede da loja para dentro dela. Recusar devolvendo `None` faz o
-    `urllib` levantar `HTTPError` com o 302, e a sonda trata isso como recusa.
-
-    Substituir e não omitir: `build_opener` reinstala os handlers padrão que faltarem, e
-    um handler ausente da lista voltaria sozinho.
-    """
-
-    def redirect_request(self, *_: object, **__: object) -> None:
-        return None
-
-
-def _abridor() -> urllib.request.OpenerDirector:
-    return urllib.request.build_opener(_SemRedirecionamento)
-
-
-def _buscar(url: str, cabecalhos: dict[str, str], corpo: bytes | None = None) -> int:
-    """Devolve **só o status**. O corpo do destino nunca sai desta função.
-
-    Devolvê-lo faria da tela um leitor de qualquer endereço que o servidor alcança.
-    """
-    requisicao = urllib.request.Request(url, data=corpo, headers=cabecalhos)
-    try:
-        with _abridor().open(requisicao, timeout=TEMPO_LIMITE_S) as resposta:
-            return int(resposta.status)
-    except urllib.error.HTTPError as erro:
-        return int(erro.code)
-    except (urllib.error.URLError, TimeoutError, OSError) as erro:
-        raise Indisponivel(type(erro).__name__) from None
 
 
 def _classificar(status: int, o_que: str) -> Veredito:
@@ -128,7 +90,7 @@ def _sondar_provedor(sessao: Session, novos: dict[Chave, str]) -> Veredito:
         {"model": provedor.modelo, "messages": [{"role": "user", "content": "ok"}], "max_tokens": 1}
     ).encode()
     try:
-        return _classificar(_buscar(provedor.url, provedor.cabecalhos(), corpo), "O provedor")
+        return _classificar(buscar(provedor.url, provedor.cabecalhos(), corpo), "O provedor")
     except Indisponivel:
         return Veredito(grava=True, aviso="Não deu para falar com o provedor agora. Valor gravado.")
 
@@ -150,7 +112,7 @@ def _sondar_evolution(sessao: Session, novos: dict[Chave, str]) -> Veredito:
     # `fetchInstances` separa os dois casos: 200 com a chave certa, 401 com a errada.
     url = f"{base}/instance/fetchInstances"
     try:
-        return _classificar(_buscar(url, {"apikey": chave}), "A Evolution")
+        return _classificar(buscar(url, {"apikey": chave}), "A Evolution")
     except Indisponivel:
         return Veredito(
             grava=True, aviso="Não deu para falar com a Evolution agora. Valor gravado."

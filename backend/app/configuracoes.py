@@ -140,9 +140,15 @@ def _sondar_evolution(sessao: Session, novos: dict[Chave, str]) -> Veredito:
     chave = efetivo[Chave.evolution_chave]
     if not (base and instancia and chave):
         return Veredito(grava=False, recusa="Faltou URL, instância ou chave da Evolution.")
-    # ponytail: caminho da Evolution API v2. Se a versão que a loja subir divergir, o que
-    # vale é o contrato dela — a spec registra isso como ponto a conferir.
-    url = f"{base}/instance/connectionState/{instancia}"
+
+    # `fetchInstances`, e **não** `connectionState/{instancia}`. Conferido contra a imagem
+    # v2.3.7: com a instância ainda inexistente, o `connectionState` devolve 404 tanto para
+    # a chave certa quanto para a errada — ele não serve para validar credencial, e usá-lo
+    # aqui impediria de salvar a configuração antes de a instância existir, que é
+    # exatamente a ordem em que a loja vai fazer isso.
+    #
+    # `fetchInstances` separa os dois casos: 200 com a chave certa, 401 com a errada.
+    url = f"{base}/instance/fetchInstances"
     try:
         return _classificar(_buscar(url, {"apikey": chave}), "A Evolution")
     except Indisponivel:

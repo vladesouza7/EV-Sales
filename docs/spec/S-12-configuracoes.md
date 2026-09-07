@@ -126,7 +126,7 @@ nada: para remover um valor, o corpo traz `{"chave": "llm_fallbacks", "limpar": 
 | Grupo | O teste | Aprova quando |
 |---|---|---|
 | Provedor | Uma chamada de 1 token ao `/chat/completions` do preset | resposta 2xx |
-| Evolution | `GET {evolution_url}/instance/connectionState/{instancia}` com a `apikey` | resposta 2xx |
+| Evolution | `GET {evolution_url}/instance/fetchInstances` com a `apikey` | resposta 2xx |
 
 `PUT` roda o mesmo teste, e **o que decide não é "falhou", é o motivo**:
 
@@ -145,8 +145,14 @@ Falhou por recusa: `422`, com a mensagem do provedor **na resposta e na tela, nu
 de autenticação costuma ecoar a credencial que o causou, e log é uma das quatro superfícies da
 invariante 5.
 
-O caminho de `connectionState` acima é o da Evolution API v2 e **precisa ser conferido contra a
-versão que a Sol & Volt subir**: se divergir, o que vale é o contrato dela, não esta linha.
+A rota da Evolution é `fetchInstances`, e **não** `connectionState/{instancia}` — conferido
+subindo a imagem v2.3.7. Com a instância ainda inexistente, `connectionState` devolve `404` tanto
+para a chave certa quanto para a errada: ele não separa credencial de nome, e sondar por ele
+impediria salvar a configuração **antes** de criar a instância, que é a ordem em que a loja vai
+fazer isso. `fetchInstances` responde `200` com a chave certa e `401` com a errada.
+
+Consequência aceita: o nome da instância não é validado no momento de salvar. Quem o valida é a
+[S-06](S-06-handoff-whatsapp.md), que é quem cria a instância.
 
 A tela mostra ainda, somente leitura, o estado que a Evolution devolveu: `conectado`,
 `desconectado` ou `não configurado`, com data da leitura. **O QR code não fica aqui** — ver §"Fora

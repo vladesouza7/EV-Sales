@@ -12,6 +12,16 @@ if [ ! -f .env ]; then
   sed -i 's|^EVSALES_DATABASE_URL=.*|EVSALES_DATABASE_URL=postgresql+psycopg://evsales:evsales@localhost:5432/evsales|' .env
 fi
 
+# `.env` de antes da S-12 não tem a chave da Evolution, e sem ela o compose nem interpola.
+# Completar o que falta é diferente de rodar o gerar-segredos de novo: aquele ROTACIONARIA a
+# EVSALES_PII_KEY, e todo nome e telefone já gravado viraria lixo ilegível.
+if ! grep -q '^EVSALES_EVOLUTION_CHAVE=.' .env; then
+  sed -i '/^EVSALES_EVOLUTION_CHAVE=/d' .env
+  printf 'EVSALES_EVOLUTION_CHAVE=%s
+' "$(openssl rand -hex 24)" >> .env
+  echo "  EVSALES_EVOLUTION_CHAVE gerada (faltava no .env)"
+fi
+
 set -a; . ./.env; set +a
 
 docker compose up -d postgres

@@ -9,6 +9,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/criar-banco-de-teste.sql:/docker-entrypoint-initdb.d/10-teste.sql:ro
+      - ./scripts/criar-banco-evolution.sql:/docker-entrypoint-initdb.d/20-evolution.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U evsales"]
       interval: 5s
@@ -32,12 +33,46 @@ services:
       interval: 5s
       retries: 10
 
+  # ADR-005 e S-10 §1 — o gateway do WhatsApp. Roda aqui dentro, e não numa instância
+  # hospedada, porque a mensagem do cliente atravessa este container: mantê-lo no servidor
+  # da loja é o mesmo argumento que o ADR-012 usou para tirar a conversa do intermediário.
+  #
+  # A `AUTHENTICATION_API_KEY` é lida pelo container **no boot**, do `.env`. A tela da S-12
+  # guarda uma cópia dela para falar com este serviço; se as duas divergirem, a sonda do
+  # `PUT /api/configuracoes` responde 401 e recusa gravar — que é o comportamento certo.
+  #
+  # Nomes conferidos contra a imagem v2.3.7, subindo o container: o Prisma conecta no banco
+  # `evolution`, o HTTP sobe na 8080, `fetchInstances` responde 200 com a chave e 401 sem.
+  evolution:
+    image: evoapicloud/evolution-api:latest
+    env_file: .env
+    environment:
+      SERVER_URL: ${EVSALES_EVOLUTION_URL:-http://localhost:8080}
+      AUTHENTICATION_API_KEY: ${EVSALES_EVOLUTION_CHAVE:?defina EVSALES_EVOLUTION_CHAVE no .env}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evsales:${POSTGRES_PASSWORD:-evsales}@postgres:5432/evolution
+      DATABASE_CONNECTION_CLIENT_NAME: evolution
+      # Sem Redis: ele é da S-10 §1 e ainda não subiu. O cache local resolve para uma loja.
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+    ports: ["8080:8080"]
+    volumes:
+      # A sessão do WhatsApp. Perder este volume é ler o QR code de novo (S-10 §5).
+      - evolution_instancias:/evolution/instances
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build: ./backend
     env_file: .env
     environment:
       EVSALES_DATABASE_URL: postgresql+psycopg://evsales:${POSTGRES_PASSWORD:-evsales}@postgres:5432/evsales
       EVSALES_MINIO_ENDPOINT: minio:9000
+      # Dentro da rede do compose o gateway é o nome do serviço. Continua sendo bootstrap:
+      # o que a tela gravar vence isto (ADR-014).
+      EVSALES_EVOLUTION_URL: http://evolution:8080
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports: ["8000:8000"]
     depends_on:
@@ -49,3 +84,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  evolution_instancias:

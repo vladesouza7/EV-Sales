@@ -190,6 +190,34 @@ def test_rede_fora_tambem_grava(
     assert valor(sessao, Chave.llm_chave) == CHAVE_FALSA
 
 
+def test_a_sonda_da_evolution_valida_a_chave_e_nao_a_instancia(
+    cliente: TestClient, sessao: Session, rai: Usuario, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Conferido contra a v2.3.7: `connectionState` de instância inexistente devolve 404
+    com chave certa e com chave errada. Sondar por ele impediria salvar a configuração
+    antes de criar a instância — que é a ordem em que a loja vai fazer isso."""
+    visitadas: list[str] = []
+
+    def anotar(url: str, *_: object, **__: object) -> int:
+        visitadas.append(url)
+        return 200
+
+    monkeypatch.setattr(modulo, "_buscar", anotar)
+    _entrar(cliente, rai)
+
+    cliente.put(
+        "/api/configuracoes",
+        json={
+            "valores": {
+                "evolution_url": "http://evolution:8080",
+                "evolution_instancia": "solevolt",
+                "evolution_chave": "chave-de-teste",
+            }
+        },
+    )
+    assert visitadas == ["http://evolution:8080/instance/fetchInstances"]
+
+
 def test_a_sonda_nao_segue_redirecionamento() -> None:
     """É assim que uma URL externa vira interna (S-12 §5)."""
     redirecionadores = [

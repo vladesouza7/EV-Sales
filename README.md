@@ -136,15 +136,36 @@ mitigado.
 ## Documentação
 
 **Estado da implementação:** o quadro por spec fica em
-[docs/spec/README.md](docs/spec/README.md#as-specs). Em resumo: landing, catálogo, chat e a agenda
-de test drive estão de pé; a Aurora, a fila da Neuza, a reserva, o WhatsApp, o trace e os cinco
-portões de CI ainda não.
+[docs/spec/README.md](docs/spec/README.md#as-specs). Em resumo: a jornada inteira está de pé —
+landing, chat, a Aurora com verificação numérica, a fila da Neuza, a reserva de chassi, o handoff
+para o WhatsApp, o test drive com desfecho, o trace e os cinco portões de CI. O que falta são
+bordas nomeadas em cada spec: o Langfuse como segunda leitura, a retenção de PII, o dossiê do
+vendedor e as duas tools que a Aurora ainda não tem.
 
 | | |
 |---|---|
 | [CASE](docs/CASE.md) | O negócio, o Raí, a Neuza, as personas e a jornada |
 | [PRD](docs/PRD.md) | Problema, escopo, o que fica de fora e como o sucesso é medido |
 | [ARQUITETURA](docs/ARQUITETURA.md) | Um agente, onde ficam os dados, onde entra o humano, o que acontece quando falha |
-| [ADRs](docs/adr/) | 11 decisões, cada uma com a alternativa descartada |
-| [SPECs](docs/spec/) | 10 specs com critérios de aceite executáveis |
+| [RUNBOOK](docs/RUNBOOK.md) | Os seis incidentes que vão acontecer, com o comando exato de cada um |
+| [ADRs](docs/adr/) | 14 decisões, cada uma com a alternativa descartada |
+| [SPECs](docs/spec/) | 12 specs com critérios de aceite executáveis |
 | [CLAUDE.md](CLAUDE.md) | O harness: invariantes, limites do agente e como eu reviso |
+
+## Backup, e a chave que não tem conserto
+
+```bash
+./scripts/backup.sh          # diário às 03h pelo cron; a linha está no RUNBOOK
+./scripts/conferir-backup.sh # restaura o dump mais novo num banco descartável, uma vez por mês
+```
+
+> **`EVSALES_PII_KEY` e `EVSALES_PII_PEPPER` não entram em backup nenhum, de propósito.**
+> Chave junto com banco cifrado é o mesmo que banco em claro. Elas ficam no gerenciador de
+> senhas do Raí, **fora do servidor** — e **perder a chave é perder o nome e o telefone de
+> todos os clientes, para sempre**: o dump continua lá, e ilegível. É o erro que não tem
+> conserto, e é por isso que ele está em negrito aqui e no
+> [RUNBOOK](docs/RUNBOOK.md#antes-de-tudo-a-chave-que-não-tem-conserto).
+
+Backup não testado é fé: o `conferir-backup.sh` restaura num banco `evsales_restauracao`,
+confere que o `psql` aceitou o arquivo inteiro e que a versão do schema é a que o código
+espera, e derruba o banco no fim. Ele nunca toca no `evsales`.

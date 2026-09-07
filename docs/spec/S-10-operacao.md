@@ -2,6 +2,18 @@
 
 **Depende de:** todas
 **Nasce de:** *"Quero que a minha equipe, e não só você, consiga colocar isso para rodar"*
+**Estado:** ◐ parcial — sobe, semeia, faz backup, restaura e reprova no CI; o compose tem 4
+dos 9 containers desenhados, e o seed é o mínimo.
+
+| § | O quê | Estado |
+|---|---|---|
+| §1 | Os containers | ◐ `postgres`, `minio`, `evolution` e `api`. Faltam `nginx`, `frontend`, `redis`, `worker` e `langfuse` — e a rotina que seria do `worker` é uma tarefa no processo da API, escrito no [RUNBOOK](../RUNBOOK.md#3-a-aurora-não-responde-e-a-evolution-está-de-pé) para ninguém procurar container que não existe |
+| §2 | Subir do zero | ✔ `gerar-segredos.sh` e `subir-dev.sh` |
+| §3 | Migrations | ✔ `conferir-migrations.sh`, e o CI roda o mesmo comando |
+| §4 | Seed | ◐ 7 unidades e 2 vendedores, o que a S-01 precisa; os 58 modelos e a base de conhecimento não |
+| §5 | Backup | ✔ `backup.sh` (diário) e `conferir-backup.sh` (restauração testada) |
+| §6 | Runbook | ✔ [docs/RUNBOOK.md](../RUNBOOK.md) |
+| §7 | CI | ✔ os cinco portões; falta o segredo `EVSALES_LLM_API_KEY` no repositório para os três de eval ficarem verdes |
 
 ---
 
@@ -124,6 +136,25 @@ Os chassis do seed são fictícios e marcados como tal.
 
 Restauração é testada uma vez por mês, num ambiente separado. Backup não testado é fé.
 
+**Como ficou, e onde diverge do quadro acima:**
+
+- `scripts/backup.sh`, diário pelo cron. A linha do cron está no
+  [RUNBOOK](../RUNBOOK.md#backup), e o destino é `EVSALES_BACKUP_DIR` — que pode ser um
+  disco externo montado. A "cópia externa" da tabela é uma linha de quem opera (`rclone`,
+  disco removível): o script escreve numa pasta e não sabe fazer upload, porque credencial
+  de nuvem no servidor da loja é uma superfície nova para guardar um backup.
+- **A sessão da Evolution é backupeada em dois lugares, e a tabela só previa um.** Com
+  `DATABASE_ENABLED=true` a instância vive no Postgres, não só no volume: o script leva o
+  dump do banco `evolution` **e** o volume, os dois com 7 dias. Backup só do volume não
+  dispensaria ler o QR de novo.
+- `documentos/` e `fotos/` saem como **cópia datada**, não espelho. Espelho com `--remove`
+  apagaria do backup o que alguém apagou por acidente; espelho sem `--remove` guardaria
+  para sempre o Espelho de um lead que a retenção da [S-09 §6](S-09-protecao-de-pii.md)
+  mandou apagar. Cópia datada expira sozinha, e é o que faz as duas coisas certas.
+- `scripts/conferir-backup.sh` é a restauração testada: banco descartável, `ON_ERROR_STOP`
+  ligado, e ele **compara a versão do Alembic no dump com a que o código espera** — um
+  backup de schema antigo restaura sem erro e depois a API não sobe.
+
 ### 6. Runbook — os incidentes que vão acontecer
 
 `docs/RUNBOOK.md`, escrito para quem não construiu o sistema:
@@ -138,6 +169,19 @@ Restauração é testada uma vez por mês, num ambiente separado. Backup não te
 | Aurora citou número errado | Falha da verificação | Abrir o trace, achar o span de verificação, abrir issue com o caso |
 
 Cada linha tem o comando exato. Sem "verifique os logs".
+
+**Como ficou:** [docs/RUNBOOK.md](../RUNBOOK.md), com as seis linhas e três correções de
+rota que a tabela acima já não descrevia:
+
+- **não existe container `worker`** — a rotina de 5 minutos é uma tarefa no processo da
+  API, e o runbook manda reiniciar a `api`. Mandar alguém reiniciar um container que não
+  existe é o pior tipo de runbook: o que dá confiança errada às 23h;
+- **`NEUZA_WHATSAPP` não existe** — o telefone de quem recebe aviso mora em
+  `usuarios.telefone_cifrado` desde a [S-12 §3](S-12-configuracoes.md), cifrado. O comando
+  do runbook pergunta **se existe** telefone, nunca qual é;
+- **elevar o teto de custo é commit, não tela.** A tabela dizia "decidir com o Raí se
+  eleva", e o runbook diz onde: `TETO_MICRO_REAIS`, com revisão e deploy. Teto que se muda
+  pela tela na hora do aperto não é teto.
 
 ### 7. CI — o que bloqueia merge
 

@@ -63,7 +63,7 @@ passam a existir.
 | [S-07](S-07-test-drive.md) | Test drive | Agenda real, dossiê do vendedor, **desfecho** | ◐ parcial — agenda, lembrete, remarcação e desfecho sim; dossiê (§8) não | |
 | [S-08](S-08-observabilidade-e-custo.md) | Trace e custo | "Ler atendimento", teto que corta | ◐ parcial — trilha, custo, teto, alertas e as duas telas sim; Langfuse não | |
 | [S-09](S-09-protecao-de-pii.md) | Proteção de PII | Cifragem, mascaramento, retenção | ◐ parcial — cifragem, máscara e a varredura sim; retenção não | ✅ varredura de logs — **existe** |
-| [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — compose (4 dos 9 containers), seed e CI sim; backup e runbook não | |
+| [S-10](S-10-operacao.md) | Operação | Compose, seed, backup, runbook, CI | ◐ parcial — seed, CI, backup com restauração testada e runbook sim; compose com 4 dos 9 containers | |
 | [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ◐ parcial — login, sessão e perfis sim; as telas são da S-04 e da S-08 | |
 | [S-12](S-12-configuracoes.md) | Configurações | Credencial e número sem `ssh`, cifrados | ◐ parcial — tela, rotas e leitor sim; o estado da instância na tela não | |
 

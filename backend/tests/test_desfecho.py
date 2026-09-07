@@ -15,7 +15,15 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.agenda import confirmar_se_o_cliente_respondeu
+from app.agenda import (
+    HorarioIndisponivel,
+    RemarcacoesEsgotadas,
+    cancelar,
+    confirmar_se_o_cliente_respondeu,
+    horarios_disponiveis,
+    remarcacoes_de,
+    remarcar,
+)
 from app.autenticacao import criar_usuario
 from app.core.pii import cifrar
 from app.db import FUSO, agora
@@ -510,3 +518,174 @@ def test_o_sim_pelo_chat_web_tambem_confirma(
     assert resposta.status_code == 201
     sessao.expire_all()
     assert sessao.get(TestDrive, cenario.id).status == "confirmado"  # type: ignore[union-attr]
+
+
+# ── §7: remarcar e cancelar ──────────────────────────────────────────────────────
+
+
+def _horario_livre(sessao: Session, cenario: TestDrive) -> datetime:
+    """Um horário que a agenda de verdade oferece — grade, almoço e antecedência inclusos."""
+    opcoes = horarios_disponiveis(sessao, chassi=cenario.chassi, lead_id=cenario.lead_id)
+    assert opcoes, "a agenda tem de oferecer algo, senão o teste não é sobre remarcação"
+    return opcoes[0][0]
+
+
+def test_cancelar_test_drive_nao_libera_o_carro(sessao: Session, cenario: TestDrive) -> None:
+    """O cenário Gherkin da spec, e a razão de a função existir separada: a agenda é do
+    vendedor, o chassi é do estoque. Liberar carro é decisão comercial."""
+    cancelar(sessao, cenario)
+    sessao.commit()
+
+    sessao.expire_all()
+    assert sessao.get(TestDrive, cenario.id).status == "cancelado"  # type: ignore[union-attr]
+    unidade = sessao.get(Unidade, cenario.chassi)
+    assert unidade is not None and unidade.status == "reservado"
+    assert unidade.reservado_para == cenario.lead_id
+    assert sessao.scalars(select(Reserva)).one().status == "ativa"
+
+
+def test_o_horario_cancelado_volta_a_ser_oferecido(sessao: Session, cenario: TestDrive) -> None:
+    """Quem devolve a vaga é o EXCLUDE do banco, que ignora ."""
+    _marcado_para(sessao, cenario, _horario_livre(sessao, cenario))
+    assert cenario.inicio not in [i for i, _ in horarios_disponiveis(
+        sessao, chassi=cenario.chassi, lead_id=cenario.lead_id
+    )]
+
+    cancelar(sessao, cenario)
+    sessao.commit()
+
+    livres = [i for i, _ in horarios_disponiveis(
+        sessao, chassi=cenario.chassi, lead_id=cenario.lead_id
+    )]
+    assert cenario.inicio in livres
+
+
+def test_remarcar_e_cancelar_e_agendar_de_novo(sessao: Session, cenario: TestDrive) -> None:
+    novo_horario = _horario_livre(sessao, cenario)
+
+    novo = remarcar(sessao, test_drive=cenario, inicio=novo_horario)
+
+    assert novo.id != cenario.id
+    assert novo.inicio == novo_horario
+    sessao.expire_all()
+    assert sessao.get(TestDrive, cenario.id).status == "cancelado"  # type: ignore[union-attr]
+    assert sessao.get(TestDrive, novo.id).status == "agendado"  # type: ignore[union-attr]
+    # O carro continua reservado: remarcar não é desistir.
+    assert sessao.get(Unidade, cenario.chassi).status == "reservado"  # type: ignore[union-attr]
+
+
+def test_a_terceira_remarcacao_da_aurora_vai_para_humano(
+    sessao: Session, cenario: TestDrive
+) -> None:
+    """§7 — máximo de 2 pela Aurora. A terceira é conversa de gente."""
+    atual = cenario
+    for _ in range(2):
+        atual = remarcar(sessao, test_drive=atual, inicio=_horario_livre(sessao, atual))
+
+    with pytest.raises(RemarcacoesEsgotadas):
+        remarcar(sessao, test_drive=atual, inicio=_horario_livre(sessao, atual))
+
+    sessao.expire_all()
+    assert remarcacoes_de(sessao, atual.conversa_id) == 2
+    assert sessao.get(TestDrive, atual.id).status == "agendado", "o que existia continua de pé"  # type: ignore[union-attr]
+
+
+def test_quem_ja_e_gente_remarca_a_terceira_vez(sessao: Session, cenario: TestDrive) -> None:
+    """O teto é da Aurora. Recusar o vendedor que está com o cliente no telefone seria
+    mandar o humano para o humano."""
+    atual = cenario
+    for _ in range(2):
+        atual = remarcar(sessao, test_drive=atual, inicio=_horario_livre(sessao, atual))
+
+    terceira = remarcar(
+        sessao, test_drive=atual, inicio=_horario_livre(sessao, atual), limite=False
+    )
+
+    assert terceira.status == "agendado"
+    assert remarcacoes_de(sessao, terceira.conversa_id) == 3
+
+
+def test_horario_ruim_nao_faz_o_cliente_perder_o_que_tinha(
+    sessao: Session, cenario: TestDrive
+) -> None:
+    """A transação da §7 é o que protege isto: se o novo horário não serve, nada aconteceu."""
+    _marcado_para(sessao, cenario, _horario_livre(sessao, cenario))
+    domingo = cenario.inicio + timedelta(days=(6 - cenario.inicio.weekday()) % 7 or 7)
+
+    with pytest.raises(HorarioIndisponivel):
+        remarcar(sessao, test_drive=cenario, inicio=domingo.replace(hour=10))
+
+    sessao.expire_all()
+    assert sessao.get(TestDrive, cenario.id).status == "agendado"  # type: ignore[union-attr]
+    assert remarcacoes_de(sessao, cenario.conversa_id) == 0
+
+
+def test_a_rota_de_cancelar_exige_sessao_e_deixa_rastro(
+    sessao: Session, cliente: TestClient, cenario: TestDrive
+) -> None:
+    assert cliente.post(f"/api/test-drives/{cenario.id}/cancelar").status_code == 401
+
+    vendedor = _vendedor(sessao, cenario)
+    _entrar(cliente, vendedor)
+    assert cliente.post(f"/api/test-drives/{cenario.id}/cancelar").status_code == 200
+
+    sessao.expire_all()
+    assert sessao.get(TestDrive, cenario.id).status == "cancelado"  # type: ignore[union-attr]
+    trilha = sessao.scalars(
+        select(Trilha).where(Trilha.nome == "test_drive_cancelado")
+    ).one()
+    assert trilha.dados["por"] == str(vendedor.id) and trilha.dados["ip"]
+
+
+def test_a_rota_de_remarcar_recusa_horario_fora_da_grade_sem_perder_o_atual(
+    sessao: Session, cliente: TestClient, cenario: TestDrive
+) -> None:
+    """Domingo a loja fecha. O 409 é a agenda recusando, e o test drive fica onde estava.
+
+    Remarcar para o **mesmo** horário, por outro lado, dá 200 — e está certo: a
+    remarcação cancela a linha antiga antes de agendar, então a vaga que ela ocupava está
+    livre para ela mesma.
+    """
+    _marcado_para(sessao, cenario, _horario_livre(sessao, cenario))
+    _entrar(cliente, _vendedor(sessao, cenario))
+    domingo = cenario.inicio + timedelta(days=(6 - cenario.inicio.weekday()) % 7 or 7)
+
+    resposta = cliente.post(
+        f"/api/test-drives/{cenario.id}/remarcar",
+        json={"inicio": domingo.replace(hour=10).isoformat()},
+    )
+
+    assert resposta.status_code == 409
+    sessao.expire_all()
+    assert sessao.get(TestDrive, cenario.id).status == "agendado"  # type: ignore[union-attr]
+
+
+def test_test_drive_com_desfecho_nao_remarca_nem_cancela(
+    sessao: Session, cliente: TestClient, cenario: TestDrive
+) -> None:
+    """O que já aconteceu não se desmarca. Cancelar depois de  apagaria o registro
+    de por que o carro saiu do catálogo."""
+    _entrar(cliente, _vendedor(sessao, cenario))
+    assert _marcar(cliente, cenario, "vendeu") == 200
+
+    assert cliente.post(f"/api/test-drives/{cenario.id}/cancelar").status_code == 409
+    resposta = cliente.post(
+        f"/api/test-drives/{cenario.id}/remarcar",
+        json={"inicio": (agora() + timedelta(days=2)).isoformat()},
+    )
+    assert resposta.status_code == 409
+
+
+def test_vendedor_nao_cancela_test_drive_de_outro(
+    sessao: Session, cliente: TestClient, cenario: TestDrive
+) -> None:
+    outra = Vendedor(nome="Jaqueline", telefone_cifrado=cifrar("+5583988710002"))
+    sessao.add(outra)
+    sessao.flush()
+    jaqueline = criar_usuario(sessao, nome="Jaqueline S", email="j2@solevolt.com.br",
+                              senha=SENHA, perfil="vendedor", vendedor_id=outra.id)  # fmt: skip
+    _entrar(cliente, jaqueline)
+
+    assert cliente.post(f"/api/test-drives/{cenario.id}/cancelar").status_code == 404
+    sessao.expire_all()
+    assert sessao.get(TestDrive, cenario.id).status == "agendado"  # type: ignore[union-attr]

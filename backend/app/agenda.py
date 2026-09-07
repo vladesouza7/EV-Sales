@@ -227,6 +227,84 @@ def agendar(
     return test_drive
 
 
+# ── §7: remarcar e cancelar ──────────────────────────────────────────────────────
+
+REMARCACOES_MAXIMAS = 2  # S-07 §7 — a terceira é conversa de gente, não de agenda
+
+
+class RemarcacoesEsgotadas(Exception):
+    """Duas remarcações já aconteceram. A terceira vai para humano (§7)."""
+
+
+def remarcacoes_de(sessao: Session, conversa_id: uuid.UUID) -> int:
+    """Quantas vezes esta conversa já mudou de horário.
+
+    É a contagem dos `cancelado` da própria conversa, e não uma coluna: remarcar cria uma
+    linha nova (é "cancelar e agendar de novo"), então um contador teria de ser copiado de
+    uma linha para a seguinte — e é na cópia que ele para de bater.
+    """
+    total = sessao.scalar(
+        select(func.count())
+        .select_from(TestDrive)
+        .where(TestDrive.conversa_id == conversa_id, TestDrive.status == "cancelado")
+    )
+    return total or 0
+
+
+def cancelar(sessao: Session, test_drive: TestDrive) -> None:
+    """S-07 §7 — cancelar test drive **não libera a reserva do chassi**.
+
+    São coisas diferentes: a agenda é do vendedor, o chassi é do estoque. Liberar carro é
+    decisão comercial, e ela tem um caminho próprio — o desfecho `desistiu` da §9 ou o
+    prazo das 72 h da S-05. Uma linha a mais aqui, `unidade.status = 'disponivel'`, poria
+    de volta no catálogo um carro que o cliente ainda vai buscar.
+
+    O horário volta a ficar livre porque o `EXCLUDE` de `test_drives` ignora `cancelado` —
+    isso é do banco, não desta função.
+    """
+    test_drive.status = "cancelado"
+    sessao.flush()
+
+
+def remarcar(
+    sessao: Session,
+    *,
+    test_drive: TestDrive,
+    inicio: datetime,
+    limite: bool = True,
+) -> TestDrive:
+    """§7 — cancelar e agendar de novo, **na mesma transação**.
+
+    Se o horário novo não serve, nada aconteceu: o cliente continua com o test drive que
+    tinha, em vez de perder o antigo e não conseguir o novo. É por isso que o `rollback`
+    está aqui e não em quem chama.
+
+    `limite=False` é para quem já é gente: o teto de 2 da spec é da Aurora, e a terceira
+    remarcação "vai para humano" — recusá-la ao vendedor que está com o cliente no
+    telefone seria mandar o humano para o humano.
+    """
+    conversa = sessao.get(Conversa, test_drive.conversa_id)
+    if conversa is None:  # pragma: no cover - FK garante
+        raise HorarioIndisponivel
+    if limite and remarcacoes_de(sessao, conversa.id) >= REMARCACOES_MAXIMAS:
+        raise RemarcacoesEsgotadas
+
+    cancelar(sessao, test_drive)
+    try:
+        return agendar(
+            sessao,
+            conversa=conversa,
+            lead_id=test_drive.lead_id,
+            chassi=test_drive.chassi,
+            inicio=inicio,
+        )
+    except (ChassiIndisponivel, HorarioIndisponivel):
+        # O `rollback` desfaz o cancelamento junto: o banco volta a ter o test drive
+        # original, e a sessão relê o `status` dele no próximo acesso.
+        sessao.rollback()
+        raise
+
+
 # S-07 §6 — "resposta afirmativa → confirmado". Palavra, não modelo: o cliente responde
 # "sim" às 22h, e nessa hora a conversa pode estar em modo humano, com a Aurora fora. Uma
 # lista fechada funciona nos dois modos e não custa uma chamada de LLM por "ok".

@@ -1,10 +1,14 @@
 """S-07 — agendamento de test drive, e o desfecho que fecha a jornada.
 
 Recorte implementado: agenda real, atribuição de vendedor, gravação com o índice de
-exclusão decidindo, o **lembrete da §6** e o **registro de desfecho da §9** — o único ponto
-em que o EV-Sales sabe que a venda aconteceu. **Fora daqui, ainda:** remarcação (§7) e o
-dossiê do vendedor (§8), que depende das objeções da `buscar_conhecimento`, tool que a
-S-03 não implementou.
+exclusão decidindo, o **lembrete da §6**, a **remarcação da §7** e o **registro de desfecho
+da §9** — o único ponto em que o EV-Sales sabe que a venda aconteceu.
+
+**Fora daqui, ainda:** o dossiê do vendedor (§8), que depende das objeções da
+`buscar_conhecimento`, tool que a S-03 não implementou; e remarcar **pela Aurora**, que
+seria entrada nova em `tools_da_etapa` — arquivo de revisão humana obrigatória. A regra da
+§7 está em `agenda.remarcar` e a rota autenticada existe; ampliar o que a Aurora pode fazer
+não é decisão de agente.
 
 O desfecho é a fronteira do ADR-011 sendo respeitada: o sistema registra **que** vendeu, e
 nada mais. Nota fiscal, financiamento e documentação acontecem na loja, e nem por
@@ -23,7 +27,15 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.agenda import ChassiIndisponivel, HorarioIndisponivel, agendar, horarios_disponiveis
+from app.agenda import (
+    ChassiIndisponivel,
+    HorarioIndisponivel,
+    agendar,
+    cancelar,
+    horarios_disponiveis,
+    remarcacoes_de,
+    remarcar,
+)
 from app.autenticacao import exige_perfil
 from app.core.dinheiro import formatar
 from app.core.pii import decifrar
@@ -244,6 +256,94 @@ def marcar_desfecho(
             detail={"mensagem": "Quem não compareceu tem desfecho 'nao_compareceu', e só."},
         )
     return registrar_desfecho(sessao, test_drive, entrada.desfecho, quem, _ip(requisicao))
+
+
+class RemarcacaoEntrada(BaseModel):
+    inicio: datetime
+
+    @field_validator("inicio")
+    @classmethod
+    def _com_fuso(cls, bruto: datetime) -> datetime:
+        return bruto.replace(tzinfo=FUSO) if bruto.tzinfo is None else bruto.astimezone(FUSO)
+
+
+@router.post("/api/test-drives/{test_drive_id}/cancelar")
+def cancelar_test_drive(
+    test_drive_id: uuid.UUID, requisicao: Request, sessao: BancoDeDados, quem: Equipe
+) -> dict[str, object]:
+    """S-07 §7 — cancela a visita e **não** mexe no chassi. Ver `agenda.cancelar`."""
+    test_drive = _do_meu_recorte(sessao, quem, test_drive_id)
+    if test_drive.desfecho is not None:
+        raise HTTPException(
+            409, detail={"mensagem": "Esse test drive já aconteceu e tem desfecho."}
+        )
+    cancelar(sessao, test_drive)
+    sessao.commit()
+    registrar(
+        sessao,
+        test_drive.conversa_id,
+        "evento",
+        "test_drive_cancelado",
+        dados={
+            "test_drive_id": str(test_drive.id),
+            "chassi": test_drive.chassi,
+            "por": str(quem.id),
+            "ip": _ip(requisicao),
+        },
+    )
+    return {"status": test_drive.status}
+
+
+@router.post("/api/test-drives/{test_drive_id}/remarcar")
+def remarcar_test_drive(
+    test_drive_id: uuid.UUID,
+    entrada: RemarcacaoEntrada,
+    requisicao: Request,
+    sessao: BancoDeDados,
+    quem: Equipe,
+) -> dict[str, object]:
+    """S-07 §7 — cancelar e agendar de novo, numa transação.
+
+    Sem o teto de 2 remarcações: ele é da Aurora, e a terceira "vai para humano" — que é
+    exatamente quem está usando esta rota.
+    """
+    test_drive = _do_meu_recorte(sessao, quem, test_drive_id)
+    if test_drive.desfecho is not None:
+        raise HTTPException(
+            409, detail={"mensagem": "Esse test drive já aconteceu e tem desfecho."}
+        )
+    try:
+        novo = remarcar(sessao, test_drive=test_drive, inicio=entrada.inicio, limite=False)
+    except ChassiIndisponivel:
+        raise HTTPException(
+            409, detail={"mensagem": "Esse carro saiu do estoque."}
+        ) from None
+    except HorarioIndisponivel:
+        raise HTTPException(
+            409,
+            detail={
+                "mensagem": "Esse horário não está livre. O test drive continua no que estava."
+            },
+        ) from None
+
+    registrar(
+        sessao,
+        novo.conversa_id,
+        "evento",
+        "test_drive_remarcado",
+        dados={
+            "de": str(test_drive.id),
+            "para": str(novo.id),
+            "quando": novo.inicio.astimezone(FUSO).isoformat(),
+            "por": str(quem.id),
+            "ip": _ip(requisicao),
+        },
+    )
+    return {
+        "test_drive_id": str(novo.id),
+        "quando": _rotulo(novo.inicio.astimezone(FUSO)),
+        "remarcacoes": remarcacoes_de(sessao, novo.conversa_id),
+    }
 
 
 def registrar_desfecho(

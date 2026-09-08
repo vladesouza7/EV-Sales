@@ -18,7 +18,7 @@ from app.autenticacao import criar_usuario
 from app.configuracao import Chave, ambiente, gravar, valor
 from app.core import http
 from app.ia.turno import provedor_atual
-from app.modelos import Trilha, Usuario
+from app.modelos import Trilha, Unidade, Usuario
 
 SENHA = "senha-de-teste-12"
 NUMERO_DA_LOJA = "+5583991575299"
@@ -325,3 +325,109 @@ def test_telefone_invalido_e_recusado(
     assert resposta.status_code == 422
     sessao.expire_all()
     assert sessao.get(Usuario, neuza.id).telefone_cifrado is None  # type: ignore[union-attr]
+
+
+# ── §5 foto de unidade ───────────────────────────────────────────────────────────
+
+SEAL_BRANCO = dict(
+    chassi="9BWZZZ377VT004471",
+    marca="BYD",
+    modelo="Seal",
+    versao="Design",
+    ano=2026,
+    cor="Branco",
+    condicao="novo",
+    km=0,
+    preco_centavos=24999000,
+    autonomia_km=372,
+    autonomia_fonte="INMETRO_PBEV_2026",
+)
+
+
+@pytest.fixture
+def seal(sessao: Session) -> Unidade:
+    unidade = Unidade(**SEAL_BRANCO)  # type: ignore[arg-type]
+    sessao.add(unidade)
+    sessao.commit()
+    return unidade
+
+
+def test_lista_de_unidades_exige_dono(cliente: TestClient, neuza: Usuario, seal: Unidade) -> None:
+    assert cliente.get("/api/configuracoes/unidades").status_code == 401
+    _entrar(cliente, neuza)
+    assert cliente.get("/api/configuracoes/unidades").status_code == 404
+
+
+def test_dono_lista_unidades_para_foto(
+    cliente: TestClient, rai: Usuario, seal: Unidade
+) -> None:
+    _entrar(cliente, rai)
+    corpo = cliente.get("/api/configuracoes/unidades").json()
+    assert len(corpo) == 1
+    assert corpo[0]["chassi"] == seal.chassi
+    assert corpo[0]["foto_url"] is None
+
+
+def test_subir_foto_grava_no_minio_e_aponta_a_unidade(
+    cliente: TestClient, sessao: Session, rai: Usuario, seal: Unidade
+) -> None:
+    from app.arquivos import ler
+
+    _entrar(cliente, rai)
+    resposta = cliente.post(
+        f"/api/configuracoes/unidades/{seal.chassi}/foto",
+        content=b"bytes-de-foto-fake",
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert resposta.status_code == 200
+    assert resposta.json() == {"foto_url": f"/fotos/{seal.chassi}.jpg"}
+
+    sessao.expire_all()
+    assert sessao.get(Unidade, seal.chassi).foto_url == f"/fotos/{seal.chassi}.jpg"  # type: ignore[union-attr]
+    guardado = ler(f"fotos/{seal.chassi}.jpg")
+    assert guardado is not None
+    assert guardado[0] == b"bytes-de-foto-fake"
+
+
+def test_subir_foto_tipo_nao_aceito_e_recusado(
+    cliente: TestClient, rai: Usuario, seal: Unidade
+) -> None:
+    _entrar(cliente, rai)
+    resposta = cliente.post(
+        f"/api/configuracoes/unidades/{seal.chassi}/foto",
+        content=b"nao e imagem",
+        headers={"Content-Type": "text/plain"},
+    )
+    assert resposta.status_code == 422
+
+
+def test_subir_foto_maior_que_5mb_e_recusada(
+    cliente: TestClient, rai: Usuario, seal: Unidade
+) -> None:
+    _entrar(cliente, rai)
+    resposta = cliente.post(
+        f"/api/configuracoes/unidades/{seal.chassi}/foto",
+        content=b"x" * (5 * 1024 * 1024 + 1),
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert resposta.status_code == 422
+
+
+def test_subir_foto_de_chassi_inexistente_e_404(cliente: TestClient, rai: Usuario) -> None:
+    _entrar(cliente, rai)
+    resposta = cliente.post(
+        "/api/configuracoes/unidades/NAOEXISTE1234567/foto",
+        content=b"bytes",
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert resposta.status_code == 404
+
+
+def test_gerente_nao_sobe_foto(cliente: TestClient, neuza: Usuario, seal: Unidade) -> None:
+    _entrar(cliente, neuza)
+    resposta = cliente.post(
+        f"/api/configuracoes/unidades/{seal.chassi}/foto",
+        content=b"bytes",
+        headers={"Content-Type": "image/jpeg"},
+    )
+    assert resposta.status_code == 404

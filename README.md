@@ -77,6 +77,117 @@ uma lista que não contém a função. Na etapa de espera pela Neuza, a lista es
 
 Cinco containers. **Sem Qdrant, sem MinIO, sem Prometheus/Grafana/Loki** — cada ausência tem ADR.
 
+## Subir o projeto
+
+**Pré-requisitos:** Docker + Docker Compose, e [uv](https://docs.astral.sh/uv/) para rodar
+scripts Python e os testes fora do container.
+
+### 1. Segredos
+
+```bash
+cp .env.example .env
+./scripts/gerar-segredos.sh   # gera EVSALES_PII_KEY, EVSALES_PII_PEPPER, EVSALES_JWT_SECRET
+```
+
+`EVSALES_PII_KEY` e `EVSALES_PII_PEPPER` cifram nome e telefone de todo cliente. **Guarde uma
+cópia fora do servidor assim que forem geradas** — perdê-las é perder esses dados para sempre,
+o backup continua lá e ilegível (mais no [RUNBOOK](docs/RUNBOOK.md#antes-de-tudo-a-chave-que-não-tem-conserto)).
+Nunca rode `gerar-segredos.sh` de novo num banco que já tem dado: ele rotaciona as três chaves.
+
+### 2. Subir os containers
+
+```bash
+./scripts/subir-dev.sh   # dev: só o Postgres no compose; migration, seed e a API no host, porta 8010
+# ou
+docker compose up -d --build   # perfil completo: postgres, minio, evolution e api
+```
+
+O `subir-dev.sh` já roda `alembic upgrade head` e `scripts/seed.py` (catálogo, vendedores e a
+base de conhecimento da Aurora). Subindo pelo `docker compose` puro, rode os dois manualmente
+com `uv --project backend run alembic upgrade head` e `uv --project backend run python scripts/seed.py`.
+
+### 3. Primeiro usuário
+
+```bash
+uv --project backend run python scripts/criar-usuario.py
+```
+
+Interativo — pede nome, e-mail, perfil (`dono`, `gerente` ou `vendedor`) e senha; a senha nunca
+aparece na tela nem no histórico do shell. É o Raí quem cria os outros três (S-11 §8): não há
+convite por e-mail, e "esqueci a senha" é rodar este script de novo com o mesmo e-mail.
+
+### 4. Chave da LLM e número do WhatsApp — pela tela, não pelo `.env`
+
+Depois de criar o usuário `dono`, entre em `/entrar` e depois em `/configuracoes`. É lá que
+ficam, cifradas no banco e nunca devolvidas em claro:
+
+- **Provedor e chave da LLM** — `openrouter` (o padrão), `ollama`, `gemini`, `nvidia` ou
+  `compativel`; o id exato do modelo; a chave do provedor. A tela testa a credencial antes de
+  gravar.
+- **WhatsApp da loja** — número, URL e credencial da instância Evolution.
+- **Quem recebe aviso** — os telefones que recebem a notificação da fila de aprovação.
+
+As variáveis equivalentes existem no `.env.example` (`EVSALES_PROVEDOR`, `EVSALES_MODELO`,
+`EVSALES_LLM_API_KEY`, `EVSALES_WHATSAPP_NUMERO`, `EVSALES_EVOLUTION_*`) só para instalação nova
+sem navegador e para o CI dos evals — é o "bootstrap" do [ADR-014](docs/adr/ADR-014-configuracao-operacional-no-banco.md).
+Assim que alguém salva pela tela, o banco vence e o que ficar no `.env` passa a ser valor velho.
+
+### Rodando os testes
+
+```bash
+cd backend
+uv run pytest              # 384 testes, precisa do Postgres do passo 2 no ar
+uv run ruff check . && uv run mypy app
+```
+
+### Foto das unidades
+
+O seed não grava `foto_url` — de propósito, porque não existe foto de verdade ainda
+naquele momento. A foto entra depois, com o chassi já cadastrado:
+
+```bash
+uv --project backend run python scripts/subir-fotos.py fotos/*.jpg
+```
+
+`fotos/9BWZZZ377VT100001.jpg` sobe para o prefixo `fotos/` do MinIO e vira a foto
+daquele chassi — o nome do arquivo **é** o chassi
+([ADR-013](docs/adr/ADR-013-minio-para-arquivo-gerado.md)). O catálogo serve a foto por
+`/fotos/{arquivo}` (rota do app, nunca a porta do MinIO diretamente) e cai em
+`sem-foto.svg` sozinho se a unidade ainda não tiver uma.
+
+Pela tela em vez de terminal: `/configuracoes` (só o `dono`) tem a seção "Fotos das
+unidades" — escolhe o carro, escolhe o arquivo (jpg, png ou webp, até 5 MB), envia. Os
+dois caminhos gravam no mesmo lugar, com a mesma regra de nome.
+
+### As telas, com o servidor local em `localhost:8010`
+
+| Rota | Tela | Quem entra |
+|---|---|---|
+| [`/`](http://localhost:8010/) | Landing e captura de lead | Pública |
+| [`/catalogo`](http://localhost:8010/catalogo) | Catálogo somente-leitura | Pública |
+| `/conversas/{id}` | Chat com a Aurora (link sai do cadastro na landing) | Sessão da conversa (cookie), sem login |
+| [`/entrar`](http://localhost:8010/entrar) | Login | Pública |
+| [`/aprovacoes`](http://localhost:8010/aprovacoes) | Fila de aprovação — a Neuza decide condição e reserva | `dono`, `gerente` |
+| [`/atendimentos`](http://localhost:8010/atendimentos) | Ler um atendimento sem jargão | `dono`, `gerente` |
+| [`/custo`](http://localhost:8010/custo) | Painel de custo (teto, gasto do mês) | `dono`, `gerente` |
+| [`/configuracoes`](http://localhost:8010/configuracoes) | WhatsApp, provedor da LLM, quem recebe aviso, fotos das unidades | só `dono` |
+| [`/test-drive`](http://localhost:8010/test-drive) | Agenda de test drive | `dono`, `gerente`, `vendedor` |
+| [`/desfecho`](http://localhost:8010/desfecho) | Marcar vendeu / vai pensar / desistiu | `dono`, `gerente`, `vendedor` |
+
+**Usuários para testar** — só existem depois de rodar
+`scripts/criar-usuario.py` (ninguém vem pronto no seed, de propósito: ver
+[§3 acima](#3-primeiro-usuário)). Nesta instância local eu já criei os dois de baixo, com a
+mesma senha que a suíte de testes usa (`tests/test_configuracoes.py`, constante `SENHA`) —
+troque antes de expor esta instância a qualquer rede que não seja a sua máquina:
+
+| Perfil | E-mail | Senha |
+|---|---|---|
+| `dono` (Raí) | `rai@solevolt.com.br` | `senha-de-teste-12` |
+| `gerente` (Neuza) | `neuza@solevolt.com.br` | `senha-de-teste-12` |
+
+Para testar como `vendedor` (Tarcísio ou Jaqueline, já cadastrados pelo `seed.py`), rode
+`criar-usuario.py` e escolha o perfil `vendedor` — o script lista os dois pelo nome.
+
 ## Harness
 
 Claude Code, com o harness versionado junto do código. `CLAUDE.md` enxuto, com **cinco invariantes**

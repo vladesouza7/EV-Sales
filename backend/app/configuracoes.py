@@ -18,11 +18,12 @@ import uuid
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.arquivos import caminho_da_foto, garantir_bucket, guardar
 from app.autenticacao import Dono
 from app.configuracao import (
     SIGILOSAS,
@@ -40,12 +41,17 @@ from app.core.pii import cifrar, decifrar, mascarar_telefone
 from app.core.validacao import normalizar_telefone
 from app.db import FUSO, obter_sessao
 from app.ia.provedor import PRESETS, ProvedorCompativel
-from app.modelos import Configuracao, Usuario, Vendedor
+from app.modelos import Configuracao, Unidade, Usuario, Vendedor
 
 router = APIRouter()
 BancoDeDados = Annotated[Session, Depends(obter_sessao)]
 
 _INSTANCIA = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+
+# S-12 · foto de unidade pela tela, mesma regra do scripts/subir-fotos.py (ADR-013): o
+# nome do objeto no MinIO é sempre o chassi, nunca o nome que o navegador mandou.
+_TIPOS_DE_FOTO_ACEITOS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+TAMANHO_MAXIMO_DA_FOTO = 5 * 1024 * 1024
 
 
 class Entrada(BaseModel):
@@ -289,3 +295,67 @@ def escrever_telefones(entrada: Telefones, sessao: BancoDeDados, usuario: Dono) 
         dados={"usuario_id": str(usuario.id), "quantos": len(prontos)},
     )
     return {"resultado": "gravado"}
+
+
+@router.get("/api/configuracoes/unidades")
+def listar_unidades_para_foto(sessao: BancoDeDados, _: Dono) -> list[dict[str, object]]:
+    """Todas as unidades, não só as `disponivel` do catálogo público: foto de um carro
+    reservado ou vendido continua precisando de manutenção."""
+    unidades = sessao.scalars(select(Unidade).order_by(Unidade.marca, Unidade.modelo)).all()
+    return [
+        {
+            "chassi": u.chassi,
+            "marca": u.marca,
+            "modelo": u.modelo,
+            "cor": u.cor,
+            "condicao": u.condicao,
+            "foto_url": u.foto_url,
+        }
+        for u in unidades
+    ]
+
+
+@router.post("/api/configuracoes/unidades/{chassi}/foto")
+async def subir_foto_da_unidade(
+    chassi: str, requisicao: Request, sessao: BancoDeDados, usuario: Dono
+) -> dict[str, str]:
+    """A tela do `scripts/subir-fotos.py` (ADR-013). Corpo é o arquivo puro, sem
+    `multipart/form-data` — evita depender de mais uma lib para um POST de bytes."""
+    unidade = sessao.get(Unidade, chassi)
+    if unidade is None:
+        raise HTTPException(404, detail={"mensagem": "Chassi não encontrado."})
+
+    tipo = requisicao.headers.get("content-type", "")
+    extensao = _TIPOS_DE_FOTO_ACEITOS.get(tipo)
+    if extensao is None:
+        raise HTTPException(422, detail={"mensagem": "Envie jpg, png ou webp."})
+
+    declarado = requisicao.headers.get("content-length")
+    if declarado and int(declarado) > TAMANHO_MAXIMO_DA_FOTO:
+        raise HTTPException(422, detail={"mensagem": "Foto maior que 5 MB."})
+    conteudo = await requisicao.body()
+    if not conteudo:
+        raise HTTPException(422, detail={"mensagem": "Arquivo vazio."})
+    if len(conteudo) > TAMANHO_MAXIMO_DA_FOTO:
+        raise HTTPException(422, detail={"mensagem": "Foto maior que 5 MB."})
+
+    garantir_bucket()
+    nome = f"{chassi}{extensao}"
+    try:
+        guardar(caminho_da_foto(nome), conteudo, tipo)
+    except RuntimeError:
+        raise HTTPException(503, detail={"mensagem": "Armazenamento fora do ar."}) from None
+
+    unidade.foto_url = f"/fotos/{nome}"
+    sessao.commit()
+
+    from app.observabilidade import registrar
+
+    registrar(
+        sessao,
+        None,
+        "evento",
+        "foto_de_unidade_trocada",
+        dados={"usuario_id": str(usuario.id), "chassi": chassi},
+    )
+    return {"foto_url": unidade.foto_url}

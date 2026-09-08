@@ -4,6 +4,11 @@ Os chassis e os preços aqui são fictícios e estão marcados como tal. Autonom
 fonte vêm de docs/pesquisa/CATALOGO-E-OBJECOES.md — nenhum número foi estimado, e o
 que não tem fonte confirmada entra NULL (ADR-003).
 
+Sem `foto_url`, de propósito: a foto entra depois, por `scripts/subir-fotos.py`, que sobe
+para o MinIO e aponta a unidade certa pelo chassi (ADR-013). Um valor fixo aqui apontando
+para um arquivo que não existe é pior que nenhum — o catálogo já degrada bem para
+`sem-foto.svg` quando falta.
+
 A base de conhecimento cobre as 4 objeções clássicas (autonomia, tempo de carga, vida útil
 da bateria, custo de manutenção), garantia, carregamento e a rota João Pessoa–Recife (S-10 §4).
 
@@ -16,12 +21,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from sqlalchemy.dialects.postgresql import insert  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
 
 from app.core.pii import cifrar  # noqa: E402
 from app.db import Sessao  # noqa: E402
-from app.ia.tools.conhecimento import ITENS_CONHECIMENTO, semear_conhecimento  # noqa: E402
-from app.modelos import ItemConhecimento, Unidade, Vendedor  # noqa: E402
+from app.ia.tools.conhecimento import semear_conhecimento  # noqa: E402
+from app.modelos import Unidade, Vendedor  # noqa: E402
 
 UNIDADES = [
     dict(
@@ -36,7 +40,6 @@ UNIDADES = [
         preco_centavos=11890000,
         autonomia_km=280,
         autonomia_fonte="INMETRO_PBEV_2026",
-        foto_url="/static/fotos/dolphin-mini-branco.jpg",
     ),
     dict(
         chassi="9BWZZZ377VT100002",
@@ -50,7 +53,6 @@ UNIDADES = [
         preco_centavos=14999000,
         autonomia_km=291,
         autonomia_fonte="INMETRO_PBEV_2026",
-        foto_url="/static/fotos/dolphin-azul.jpg",
     ),
     dict(
         chassi="9BWZZZ377VT004471",
@@ -64,7 +66,6 @@ UNIDADES = [
         preco_centavos=24999000,
         autonomia_km=372,
         autonomia_fonte="INMETRO_PBEV_2026",
-        foto_url="/static/fotos/seal-branco.jpg",
     ),
     dict(
         chassi="9BWZZZ377VT009902",
@@ -78,7 +79,6 @@ UNIDADES = [
         preco_centavos=24999000,
         autonomia_km=372,
         autonomia_fonte="INMETRO_PBEV_2026",
-        foto_url="/static/fotos/seal-cinza.jpg",
     ),
     dict(
         chassi="9BGZZZ377VT100005",
@@ -92,7 +92,6 @@ UNIDADES = [
         preco_centavos=50319000,
         autonomia_km=481,
         autonomia_fonte="INMETRO_PBEV_2026",
-        foto_url="/static/fotos/blazer-ev-rs.jpg",
     ),
     dict(
         chassi="5YJYGDEE1LF100006",
@@ -106,7 +105,6 @@ UNIDADES = [
         preco_centavos=44990000,
         autonomia_km=533,
         autonomia_fonte="WLTP",
-        foto_url="/static/fotos/model-y-branco.jpg",
     ),
     dict(
         chassi="WP0ZZZY1ZKSA09902",
@@ -120,7 +118,6 @@ UNIDADES = [
         preco_centavos=52900000,
         autonomia_km=None,
         autonomia_fonte=None,
-        foto_url="/static/fotos/taycan-cinza.jpg",
     ),
 ]
 

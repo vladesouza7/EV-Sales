@@ -41,6 +41,27 @@
       <button class="principal" type="submit">Testar e salvar</button>
     </form>
 
+    <div class="bloco" id="fotos-bloco">
+      <h2>Fotos das unidades</h2>
+      <p class="detalhe">Cada foto é de um chassi, não de um modelo — dois carros iguais na
+        tabela podem ter fotos diferentes.</p>
+      <div class="campo">
+        <span>Unidade</span>
+        <select id="foto-unidade"></select>
+      </div>
+      <div class="campo">
+        <span>Foto atual</span>
+        <img id="foto-atual" alt="Foto atual da unidade" width="160"
+          style="display:block;border-radius:8px;object-fit:cover;" />
+      </div>
+      <div class="campo">
+        <span>Nova foto (jpg, png ou webp, até 5 MB)</span>
+        <input type="file" id="foto-arquivo" accept="image/jpeg,image/png,image/webp" />
+      </div>
+      <button class="principal" type="button" id="foto-enviar">Enviar foto</button>
+      <p class="detalhe" id="foto-recado"></p>
+    </div>
+
     <form class="bloco" data-grupo="telefones">
       <h2>Quem recebe aviso</h2>
       <p class="detalhe">
@@ -209,6 +230,68 @@
       await carregar();
     }
 
+    // ── Fotos das unidades ──────────────────────────────────────────────────────
+    var unidadesPorChassi = {};
+
+    function fotoOuPadrao(unidade) {
+      return (unidade && unidade.foto_url) || "/static/sem-foto.svg";
+    }
+
+    async function carregarFotos() {
+      var resposta = await fetch("/api/configuracoes/unidades");
+      if (resposta.status === 401) { irParaLogin(); return; }
+      if (!resposta.ok) return;
+      var unidades = await resposta.json();
+
+      var selecao = document.getElementById("foto-unidade");
+      selecao.innerHTML = "";
+      unidades.forEach(function (unidade) {
+        unidadesPorChassi[unidade.chassi] = unidade;
+        var opcao = document.createElement("option");
+        opcao.value = unidade.chassi;
+        opcao.textContent = unidade.marca + " " + unidade.modelo + " · " + unidade.cor +
+          " · " + unidade.chassi.slice(-6);
+        selecao.appendChild(opcao);
+      });
+      document.getElementById("foto-atual").src = fotoOuPadrao(unidades[0]);
+    }
+
+    document.getElementById("foto-unidade").addEventListener("change", function () {
+      document.getElementById("foto-atual").src =
+        fotoOuPadrao(unidadesPorChassi[this.value]);
+    });
+
+    document.getElementById("foto-enviar").addEventListener("click", async function () {
+      var chassi = document.getElementById("foto-unidade").value;
+      var arquivo = document.getElementById("foto-arquivo").files[0];
+      var recado = document.getElementById("foto-recado");
+      if (!chassi || !arquivo) {
+        recado.textContent = "Escolha a unidade e a foto.";
+        recado.style.color = "var(--erro)";
+        return;
+      }
+      recado.textContent = "Enviando…";
+      recado.style.color = "";
+
+      var resposta = await fetch("/api/configuracoes/unidades/" + chassi + "/foto", {
+        method: "POST",
+        headers: { "Content-Type": arquivo.type },
+        body: arquivo
+      });
+      if (resposta.status === 401) { irParaLogin(); return; }
+      var corpo = await resposta.json();
+      if (!resposta.ok) {
+        recado.textContent = (corpo.detail && corpo.detail.mensagem) || "Não deu para enviar.";
+        recado.style.color = "var(--erro)";
+        return;
+      }
+      unidadesPorChassi[chassi].foto_url = corpo.foto_url;
+      document.getElementById("foto-atual").src = corpo.foto_url + "?" + Date.now();
+      document.getElementById("foto-arquivo").value = "";
+      recado.textContent = "Foto salva.";
+      recado.style.color = "";
+    });
+
     document.querySelectorAll("form[data-grupo]").forEach(function (formulario) {
       formulario.addEventListener("submit", function (evento) {
         evento.preventDefault();
@@ -224,6 +307,7 @@
     });
 
     carregar();
+    carregarFotos();
   </script>
 </body>
 

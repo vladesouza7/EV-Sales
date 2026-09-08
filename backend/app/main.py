@@ -3,7 +3,7 @@
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -28,6 +28,7 @@ from app.db import agora, obter_sessao
 from app.ia.tools.estoque import buscar_unidades
 from app.ia.turno import provedor_atual
 from app.leads import LeadEntrada, abrir_conversa, gravar_cookie
+from app.mcp_server import montagem
 from app.modelos import Conversa, Lead, PedidoDeAprovacao
 from app.observabilidade import registrar
 from app.testdrive import router as rotas_de_test_drive
@@ -46,16 +47,26 @@ async def ciclo_de_vida(_: FastAPI) -> AsyncIterator[None]:
     ponytail: um task no processo, não um container `worker`. Vira consumidor de fila
     quando houver fila (S-10 §1); enquanto isso, é isto ou `liberar_vencidas` continuar
     sendo código que ninguém chama.
+
+    Duas coisas que o MCP monta aqui, não em `mcp_server.py`: uma instância nova do app a
+    cada início de lifespan — o `session_manager` de dentro dele só roda uma vez por
+    instância, e um segundo start (o próximo teste com `TestClient`, um reload) recusaria
+    numa instância já usada. E o `AsyncExitStack` entrando no lifespan dela: `Mount` não
+    propaga lifespan de app montado sozinho, é preciso entrar explicitamente aqui.
     """
-    tarefa = rotinas.começar()
-    try:
-        yield
-    finally:
-        await rotinas.parar(tarefa)
+    async with AsyncExitStack() as pilha:
+        mcp_app = montagem.renovar()
+        await pilha.enter_async_context(mcp_app.router.lifespan_context(mcp_app))
+        tarefa = rotinas.começar()
+        try:
+            yield
+        finally:
+            await rotinas.parar(tarefa)
 
 
 app = FastAPI(title="EV-Sales — Sol & Volt", lifespan=ciclo_de_vida)
 app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
+app.mount("/mcp", montagem)
 app.include_router(rotas_de_autenticacao)
 app.include_router(rotas_de_aprovacao)
 app.include_router(rotas_de_atendimento)

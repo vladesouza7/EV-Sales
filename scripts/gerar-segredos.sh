@@ -21,6 +21,9 @@ trocar EVSALES_JWT_SECRET "$(openssl rand -base64 32)"
 # A chave do gateway do WhatsApp. O container da Evolution a lê no boot, e a tela da S-12
 # guarda a cópia com que o EV-Sales fala com ele (S-12 §2, ADR-005).
 trocar EVSALES_EVOLUTION_CHAVE "$(openssl rand -hex 24)"
+# O MCP fala com o mesmo escopo da tela de configurações, por outra porta — chave própria,
+# nunca o login do dono. Sem ela no ambiente, /mcp recusa todo pedido.
+trocar EVSALES_MCP_CHAVE "$(openssl rand -hex 24)"
 
 cat <<'AVISO'
 

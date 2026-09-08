@@ -188,6 +188,31 @@ troque antes de expor esta instância a qualquer rede que não seja a sua máqui
 Para testar como `vendedor` (Tarcísio ou Jaqueline, já cadastrados pelo `seed.py`), rode
 `criar-usuario.py` e escolha o perfil `vendedor` — o script lista os dois pelo nome.
 
+### MCP — configurar e ler estoque/atendimento por uma IA
+
+Um cliente MCP (Claude Desktop, Claude Code, qualquer host compatível) alcança o mesmo
+escopo da tela `/configuracoes`, mais leitura de estoque e atendimento — em
+`http://localhost:8010/mcp/` (repare na barra final; sem ela o servidor responde com um
+redirecionamento). **Nunca** o login do dono: a chave é outra, dedicada, gerada por
+`gerar-segredos.sh` (`EVSALES_MCP_CHAVE`, sem entrada em `.env.example` de propósito — é
+gerada, não escolhida). Todo pedido sem `Authorization: Bearer <chave>` correto recebe
+401, e sem a variável no ambiente **nenhum** pedido passa.
+
+| Tool | Faz |
+|---|---|
+| `ler_configuracoes` | Estado atual — segredo nunca em claro, só os 4 últimos caracteres |
+| `salvar_configuracoes` | WhatsApp da loja ou provedor da LLM — mesma sonda da tela antes de gravar |
+| `salvar_telefones` | Troca quem recebe aviso da fila de aprovação |
+| `listar_unidades_para_foto` / `subir_foto_da_unidade` | O mesmo par da seção de fotos acima |
+| `buscar_unidades` / `detalhar_unidade` | Somente leitura, só o que está `disponivel` |
+| `listar_atendimentos` / `ler_atendimento` / `custo_do_mes` | Somente leitura, mesmas telas do dono |
+
+**Não existe, e não é esquecimento:** nenhuma tool toca preço, desconto, reserva ou
+aprovação. Essas ações continuam só atrás da fila da Neuza (ADR-004) — um segundo caminho
+de acesso ali seria a própria porta que a invariante 2 existe para fechar. Todo tool call
+é auditado como o `dono` cadastrado (mesma trilha da tela), então precisa haver um usuário
+`dono` — o passo 3 acima.
+
 ## Harness
 
 Claude Code, com o harness versionado junto do código. `CLAUDE.md` enxuto, com **cinco invariantes**

@@ -315,36 +315,40 @@ def listar_unidades_para_foto(sessao: BancoDeDados, _: Dono) -> list[dict[str, o
     ]
 
 
-@router.post("/api/configuracoes/unidades/{chassi}/foto")
-async def subir_foto_da_unidade(
-    chassi: str, requisicao: Request, sessao: BancoDeDados, usuario: Dono
-) -> dict[str, str]:
-    """A tela do `scripts/subir-fotos.py` (ADR-013). Corpo é o arquivo puro, sem
-    `multipart/form-data` — evita depender de mais uma lib para um POST de bytes."""
+class FotoRecusada(ValueError):
+    """Mensagem e código já prontos pro chamador — 422 é o padrão, 404 e 503 são os
+    dois casos que precisam de outro."""
+
+    def __init__(self, mensagem: str, codigo: int = 422) -> None:
+        super().__init__(mensagem)
+        self.codigo = codigo
+
+
+def gravar_foto_da_unidade(
+    sessao: Session, usuario: Usuario, chassi: str, tipo: str, conteudo: bytes
+) -> str:
+    """O que a tela e a tool MCP têm em comum (ADR-013): valida tipo e tamanho, sobe pro
+    MinIO com o nome do chassi, aponta `foto_url`, audita. Quem chama já decidiu como o
+    arquivo chegou — bytes puros do corpo HTTP, ou base64 decodificado da tool.
+    """
     unidade = sessao.get(Unidade, chassi)
     if unidade is None:
-        raise HTTPException(404, detail={"mensagem": "Chassi não encontrado."})
+        raise FotoRecusada("Chassi não encontrado.", 404)
 
-    tipo = requisicao.headers.get("content-type", "")
     extensao = _TIPOS_DE_FOTO_ACEITOS.get(tipo)
     if extensao is None:
-        raise HTTPException(422, detail={"mensagem": "Envie jpg, png ou webp."})
-
-    declarado = requisicao.headers.get("content-length")
-    if declarado and int(declarado) > TAMANHO_MAXIMO_DA_FOTO:
-        raise HTTPException(422, detail={"mensagem": "Foto maior que 5 MB."})
-    conteudo = await requisicao.body()
+        raise FotoRecusada("Envie jpg, png ou webp.")
     if not conteudo:
-        raise HTTPException(422, detail={"mensagem": "Arquivo vazio."})
+        raise FotoRecusada("Arquivo vazio.")
     if len(conteudo) > TAMANHO_MAXIMO_DA_FOTO:
-        raise HTTPException(422, detail={"mensagem": "Foto maior que 5 MB."})
+        raise FotoRecusada("Foto maior que 5 MB.")
 
     garantir_bucket()
     nome = f"{chassi}{extensao}"
     try:
         guardar(caminho_da_foto(nome), conteudo, tipo)
     except RuntimeError:
-        raise HTTPException(503, detail={"mensagem": "Armazenamento fora do ar."}) from None
+        raise FotoRecusada("Armazenamento fora do ar.", 503) from None
 
     unidade.foto_url = f"/fotos/{nome}"
     sessao.commit()
@@ -358,4 +362,23 @@ async def subir_foto_da_unidade(
         "foto_de_unidade_trocada",
         dados={"usuario_id": str(usuario.id), "chassi": chassi},
     )
-    return {"foto_url": unidade.foto_url}
+    return unidade.foto_url
+
+
+@router.post("/api/configuracoes/unidades/{chassi}/foto")
+async def subir_foto_da_unidade(
+    chassi: str, requisicao: Request, sessao: BancoDeDados, usuario: Dono
+) -> dict[str, str]:
+    """A tela do `scripts/subir-fotos.py` (ADR-013). Corpo é o arquivo puro, sem
+    `multipart/form-data` — evita depender de mais uma lib para um POST de bytes."""
+    tipo = requisicao.headers.get("content-type", "")
+    declarado = requisicao.headers.get("content-length")
+    if declarado and int(declarado) > TAMANHO_MAXIMO_DA_FOTO:
+        raise HTTPException(422, detail={"mensagem": "Foto maior que 5 MB."})
+    conteudo = await requisicao.body()
+
+    try:
+        foto_url = gravar_foto_da_unidade(sessao, usuario, chassi, tipo, conteudo)
+    except FotoRecusada as erro:
+        raise HTTPException(erro.codigo, detail={"mensagem": str(erro)}) from None
+    return {"foto_url": foto_url}

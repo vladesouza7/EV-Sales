@@ -84,6 +84,10 @@ jobs:
       - name: "Portões — evals da Aurora: preço, autonomia e injection (S-03 §8)"
         env:
           EVSALES_PROVEDOR: ${{ vars.EVSALES_PROVEDOR || 'openrouter' }}
+          # Sem esta linha, `EVSALES_PROVEDOR=ollama` cai no preset `http://localhost:11434`
+          # e o eval morre em conexão recusada — não existe Ollama no runner. Vazia, o
+          # preset do provedor vence, que é o comportamento do `provedor.py`.
+          EVSALES_LLM_URL: ${{ vars.EVSALES_LLM_URL }}
           EVSALES_MODELO: ${{ vars.EVSALES_MODELO }}
           EVSALES_LLM_API_KEY: ${{ secrets.EVSALES_LLM_API_KEY }}
           EVSALES_DOLAR_CENTAVOS: ${{ vars.EVSALES_DOLAR_CENTAVOS || '550' }}

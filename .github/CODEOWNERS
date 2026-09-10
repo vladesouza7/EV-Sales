@@ -1,0 +1,44 @@
+# CLAUDE.md — "O que NÃO fica na mão do agente".
+#
+# Aquela tabela promete que estes arquivos exigem revisão humana explícita. Sem este
+# arquivo a promessa vive num markdown que ninguém é obrigado a abrir, e um PR que mexe
+# na cifragem de PII passa igual a um que corrige um typo. CODEOWNERS é o que faz o
+# GitHub cobrar.
+#
+# Só tem efeito com **Require review from Code Owners** ligado na proteção da `main`.
+
+# ── Migrations ───────────────────────────────────────────────────────────────────
+# O CLAUDE.md nomeia `unidades`, `reservas`, `pedidos_de_aprovacao` e `espelhos`, mas
+# CODEOWNERS não sabe quais tabelas uma migration toca. O diretório inteiro entra: a
+# alternativa é não cobrir nenhuma.
+/backend/migrations/versions/    @vladesouza7
+
+# ── A superfície do que a Aurora pode fazer ──────────────────────────────────────
+# Acrescentar uma tool a uma etapa é ampliar poder, não configurar comportamento.
+/backend/app/ia/etapas.py        @vladesouza7
+
+# ── Prompts ──────────────────────────────────────────────────────────────────────
+# Mudança aqui exige eval comparativo antes e depois.
+/backend/app/ia/prompts/         @vladesouza7
+
+# ── PII ──────────────────────────────────────────────────────────────────────────
+# Cifragem, hash indexável, mascaramento e redação.
+/backend/app/core/pii.py         @vladesouza7
+
+# ── Schema ───────────────────────────────────────────────────────────────────────
+# O arquivo carrega o marcador de revisão obrigatória: é onde as constraints que
+# garantem as invariantes 3 e 4 são declaradas.
+/backend/app/modelos.py          @vladesouza7
+
+# ── Operação e segredo ───────────────────────────────────────────────────────────
+/docker-compose.yml              @vladesouza7
+/.env.example                    @vladesouza7
+
+# ── ADRs ─────────────────────────────────────────────────────────────────────────
+# Registro histórico. Decisão nova é ADR novo, nunca edição do antigo.
+/docs/adr/                       @vladesouza7
+
+# ── O harness e os próprios portões ──────────────────────────────────────────────
+# Quem edita o CI pode desligar o CI.
+/CLAUDE.md                       @vladesouza7
+/.github/                        @vladesouza7

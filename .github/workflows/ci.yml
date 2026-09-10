@@ -13,6 +13,13 @@ on:
 permissions:
   contents: read
 
+# O passo dos evals fala com o provedor de verdade e é a única coisa aqui que custa
+# dinheiro por execução. Push novo na mesma branch cancela a corrida anterior: sem isto,
+# três commits seguidos pagam três vezes pela mesma resposta.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   portoes:
     runs-on: ubuntu-latest
@@ -35,6 +42,12 @@ jobs:
           # Também exercita o script da S-10 §2 — e a Evolution exige a chave dela para o
           # compose sequer interpolar, o que é o modo certo de falhar.
           ./scripts/gerar-segredos.sh
+          # O volume do postgres nasce com a senha do `.env`, e a suíte conecta pela URL
+          # padrão do `conftest` — `evsales:evsales`. Sem esta linha o container sobe com o
+          # placeholder `troque-esta-senha` do `.env.example` e **todos** os testes falham
+          # na autenticação. É a mesma troca que o `subir-dev.sh` faz na máquina de quem
+          # desenvolve, pelo mesmo motivo; o placeholder existe para o humano trocar.
+          sed -i 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=evsales|' .env
           docker compose up -d postgres minio
           timeout 120 bash -c 'until docker compose exec -T postgres pg_isready -U evsales; do sleep 1; done'
           timeout 120 bash -c 'until curl -sf localhost:9000/minio/health/live; do sleep 1; done'

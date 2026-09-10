@@ -15,10 +15,10 @@ from sqlalchemy.orm import Session
 
 from app import configuracoes as modulo
 from app.autenticacao import criar_usuario
-from app.configuracao import Chave, ambiente, gravar, valor
+from app.configuracao import Chave, ambiente, esquecer, gravar, valor
 from app.core import http
 from app.ia.turno import provedor_atual
-from app.modelos import Trilha, Unidade, Usuario
+from app.modelos import Configuracao, Trilha, Unidade, Usuario
 
 SENHA = "senha-de-teste-12"
 NUMERO_DA_LOJA = "+5583991575299"
@@ -431,3 +431,26 @@ def test_gerente_nao_sobe_foto(cliente: TestClient, neuza: Usuario, seal: Unidad
         headers={"Content-Type": "image/jpeg"},
     )
     assert resposta.status_code == 404
+
+
+def test_linha_com_chave_girada_nao_tranca_a_tela(
+    cliente: TestClient, sessao: Session, rai: Usuario
+) -> None:
+    """Rodar `gerar-segredos.sh` de novo deixa toda linha de `configuracoes` ilegível.
+
+    Se isso derrubasse a tela, a única forma de regravar a credencial seria a tela que
+    não abre — e o conserto viraria `psql`. Vale por qualquer blob corrompido.
+    """
+    gravar(sessao, Chave.whatsapp_numero, NUMERO_DA_LOJA, rai)
+    linha = sessao.scalars(
+        select(Configuracao).where(Configuracao.chave == Chave.whatsapp_numero.value)
+    ).one()
+    linha.valor_cifrado = b"\x00" * 40  # o que a chave antiga deixa para trás
+    sessao.commit()
+    esquecer()
+
+    _entrar(cliente, rai)
+    resposta = cliente.get("/api/configuracoes")
+
+    assert resposta.status_code == 200
+    assert valor(sessao, Chave.whatsapp_numero) == ""  # cai no `.env`, não estoura

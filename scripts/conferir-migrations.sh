@@ -23,9 +23,12 @@ export EVSALES_DATABASE_URL="postgresql+psycopg://evsales:${SENHA}@localhost:543
 echo "banco descartável: $BANCO"
 
 cd backend
-uv run alembic upgrade head   >/dev/null && echo "  ✓ sobe"
-uv run alembic downgrade base >/dev/null && echo "  ✓ desce"
-uv run alembic upgrade head   >/dev/null && echo "  ✓ sobe de novo"
+uv run alembic upgrade head   >/dev/null
+echo "  ✓ sobe"
+uv run alembic downgrade base >/dev/null
+echo "  ✓ desce"
+uv run alembic upgrade head   >/dev/null
+echo "  ✓ sobe de novo"
 cd ..
 
 docker compose exec -T postgres psql -U evsales -d postgres \

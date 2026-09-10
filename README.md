@@ -3,7 +3,7 @@ projeto: EV-Sales — Agente de Vendas de Ponta a Ponta
 autor: Vlademir Souza
 usuario: vladesouza7
 dominio: Concessionária multimarca de veículos elétricos
-repositorio: https://github.com/vladesouza7/desafio-jornada/tree/main/desafio-vendas/projetos/vladesouza7/EV-Sales
+repositorio: https://github.com/vladesouza7/EV-Sales
 linkedin: https://www.linkedin.com/in/vlademir-souza-ads
 portfólio: https://vladetec.github.io/portifolio-blog-posts/templates/index.html
 plataforma: https://suajornadadedados.curseduca.pro/m/community/posts/a773a771-9319-4f51-8340-2358d8d9832d

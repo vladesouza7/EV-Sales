@@ -80,7 +80,16 @@ PRESETS: dict[str, Preset] = {
         # ADR-006: sem `usage.include` não vem `cost`, e a alternativa seria um tokenizer
         # local estimando o que o Raí paga. ADR-007: é o `data_collection` que torna o
         # OpenRouter aceitável para a conversa de um cliente da Sol & Volt.
-        extras={"usage": {"include": True}, "provider": {"data_collection": "deny"}},
+        #
+        # `require_parameters`: sem isto o OpenRouter pode rotear para um backend que
+        # ignora `tools` e deixa o modelo emular chamada de tool com o próprio token de
+        # controle em texto puro — visto ao vivo no eval (S-03 §8, caso auto-05):
+        # `<｜tool▁calls▁begin｜>...` na resposta ao cliente. Com isto, só entram
+        # backends que suportam de verdade o parâmetro que este payload manda.
+        extras={
+            "usage": {"include": True},
+            "provider": {"data_collection": "deny", "require_parameters": True},
+        },
         cabecalhos={"X-Title": "EV-Sales - Sol & Volt"},
     ),
     "ollama": Preset(

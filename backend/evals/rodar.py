@@ -63,7 +63,7 @@ from sqlalchemy.dialects.postgresql import insert  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db import Base, engine  # noqa: E402
-from app.ia.provedor import ProvedorCompativel  # noqa: E402
+from app.ia.provedor import PRESETS, ProvedorCompativel  # noqa: E402
 from app.ia.tools.conhecimento import ITENS_CONHECIMENTO  # noqa: E402
 from app.ia.turno import Evento, executar_turno  # noqa: E402
 
@@ -367,9 +367,24 @@ def main() -> int:
 
     provedor = ProvedorCompativel()
     if not provedor.configurado():
+        # Nomear o que falta, e não "faltam o modelo e a chave" para todo caso: a mensagem
+        # genérica culpava o modelo quando o vazio era a URL, e quem lê o log do CI não tem
+        # como abrir o `configurado()` para descobrir qual dos três é.
+        faltando = []
+        if not provedor.conhecido:
+            faltando.append(
+                f"EVSALES_PROVEDOR={provedor.nome!r} não está na tabela "
+                f"({', '.join(sorted(PRESETS))})"
+            )
+        if provedor.preset.exige_chave and not provedor.chave:
+            faltando.append("EVSALES_LLM_API_KEY")
+        if not provedor.modelo:
+            faltando.append("EVSALES_MODELO")
+        if not provedor.url:
+            faltando.append("EVSALES_LLM_URL — o preset deste provedor não traz base própria")
         print(
             "provedor de LLM não configurado (ADR-012), e este eval fala com o modelo de "
-            f"verdade: faltam EVSALES_MODELO e a chave do provedor {provedor.nome!r}."
+            f"verdade. Provedor {provedor.nome!r}; falta: {'; '.join(faltando)}."
         )
         return 2
     print(f"provedor {provedor.nome} · modelo {provedor.modelo} · banco {banco}")

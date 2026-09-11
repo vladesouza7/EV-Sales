@@ -92,6 +92,34 @@ AVISO_SEM_AUTONOMIA = (
 )
 
 
+def listar_para_o_modelo(unidades: list[dict[str, object]]) -> dict[str, object]:
+    """A mesma proteção da `comparar_unidades`, para quem só pediu a lista.
+
+    A `comparar_unidades` recusa comparar padrões diferentes porque devolve um `aviso`
+    estruturado — e o docstring dela diz por quê: "a recusa é retorno de tool, e não uma
+    linha de prompt". A `buscar_unidades` não tinha isso, e uma listagem com WLTP e
+    Inmetro juntos chegava ao modelo sem nada dizendo que os números não se comparam.
+    Foi assim que a Aurora disse "mais autonomia" entre um 533 WLTP e um 481 Inmetro
+    (S-03 §8, caso auto-08).
+
+    Só o caminho do modelo passa por aqui. O `/api/catalogo` da S-01 §6 e o MCP seguem
+    recebendo a lista crua — o aviso é instrução de conduta, não dado de catálogo.
+    """
+    fontes = {u.get("autonomia_fonte") for u in unidades if u.get("autonomia_km") is not None}
+    sem_medicao = any(u.get("autonomia_km") is None for u in unidades)
+
+    if len(fontes) > 1:
+        aviso: str | None = AVISO_FONTES_DIFERENTES.format(
+            fontes=" e ".join(sorted(str(f) for f in fontes))
+        )
+    elif sem_medicao:
+        aviso = AVISO_SEM_AUTONOMIA
+    else:
+        aviso = None
+
+    return {"unidades": unidades, "autonomia_comparavel": aviso is None, "aviso": aviso}
+
+
 def comparar_unidades(sessao: Session, chassis: list[str]) -> dict[str, object]:
     """S-03 §1 — o lugar onde a invariante 6 é cumprida.
 

@@ -18,7 +18,12 @@ from sqlalchemy.orm import Session
 from app.aprovacao import solicitar_aprovacao
 from app.ia.etapas import tools_da_etapa
 from app.ia.tools.conhecimento import buscar_conhecimento
-from app.ia.tools.estoque import buscar_unidades, comparar_unidades, detalhar_unidade
+from app.ia.tools.estoque import (
+    buscar_unidades,
+    comparar_unidades,
+    detalhar_unidade,
+    listar_para_o_modelo,
+)
 from app.ia.tools.qualificacao import registrar_qualificacao, transferir_para_humano
 from app.modelos import Conversa
 from app.reserva import reservar_chassi
@@ -83,11 +88,15 @@ REGISTRO: dict[str, Tool] = {
             },
             [],
         ),
-        executar=lambda sessao, _conversa, args: buscar_unidades(
-            sessao,
-            preco_max_centavos=args.get("preco_max_centavos"),  # type: ignore[arg-type]
-            condicao=args.get("condicao"),  # type: ignore[arg-type]
-            autonomia_min_km=args.get("autonomia_min_km"),  # type: ignore[arg-type]
+        # `listar_para_o_modelo` só aqui: o `/api/catalogo` e o MCP continuam recebendo a
+        # lista crua. O `aviso` é instrução de conduta para o turno, não dado de catálogo.
+        executar=lambda sessao, _conversa, args: listar_para_o_modelo(
+            buscar_unidades(
+                sessao,
+                preco_max_centavos=args.get("preco_max_centavos"),  # type: ignore[arg-type]
+                condicao=args.get("condicao"),  # type: ignore[arg-type]
+                autonomia_min_km=args.get("autonomia_min_km"),  # type: ignore[arg-type]
+            )
         ),
     ),
     "detalhar_unidade": Tool(

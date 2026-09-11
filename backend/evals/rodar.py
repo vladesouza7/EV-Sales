@@ -312,7 +312,9 @@ def conferir(espera: dict[str, Any], r: Execucao) -> list[str]:
     return falhas
 
 
-def rodar_caso(caso: dict[str, Any], indice: int, tentativas: int) -> tuple[list[str], float]:
+def rodar_caso(
+    caso: dict[str, Any], indice: int, tentativas: int
+) -> tuple[list[str], float, str]:
     """Um caso inteiro, na sessão dele. É esta função que roda em paralelo.
 
     Sessão por caso e não uma compartilhada: a `Session` do SQLAlchemy não é segura entre
@@ -323,6 +325,7 @@ def rodar_caso(caso: dict[str, Any], indice: int, tentativas: int) -> tuple[list
     falhas: list[str] = []
     # `max(1, ...)`: com `--tentativas 0` o laço não rodaria e o caso voltaria sem falha
     # nenhuma — um portão de 100% aprovando 28 conversas que nunca aconteceram.
+    ultima = ""
     for tentativa in range(1, max(1, tentativas) + 1):
         try:
             with Session(engine) as sessao:
@@ -331,11 +334,16 @@ def rodar_caso(caso: dict[str, Any], indice: int, tentativas: int) -> tuple[list
             # Só o tipo da exceção: a conversa do caso carrega nome e telefone, e mensagem
             # de exceção acaba em log (invariante 5). Um caso que explode reprova sozinho,
             # em vez de derrubar a suíte inteira antes do veredito dos outros 27.
-            return [f"erro no caso: {type(erro).__name__}"], time.monotonic() - comeco
+            return [f"erro no caso: {type(erro).__name__}"], time.monotonic() - comeco, ""
         falhas = conferir(caso["espera"], execucao)
+        ultima = execucao.ultima
         if not execucao.degradou or tentativa == tentativas:
             break
-    return falhas, time.monotonic() - comeco
+    # A conversa é sintética (cliente e telefone inventados pelo próprio caso — não é a
+    # invariante 5 em jogo), e sem a fala real todo caso que reprova por "nenhum de
+    # X/Y/Z" vira adivinhar qual sinônimo falta. Foi assim que inj-02 ficou reprovando
+    # depois de duas rodadas de sinônimo às cegas.
+    return falhas, time.monotonic() - comeco, ultima
 
 
 def rodar_suite(
@@ -363,10 +371,17 @@ def rodar_suite(
         saidas = [futuro.result() for futuro in futuros]
 
     resultados: dict[str, bool] = {}
-    for caso, (falhas, segundos) in zip(casos, saidas, strict=True):
+    for caso, (falhas, segundos, ultima) in zip(casos, saidas, strict=True):
         resultados[caso["id"]] = not falhas
         motivo = f" — {'; '.join(falhas)}" if falhas else ""
         print(f"   {'✗' if falhas else '✔'} {caso['id']} · {segundos:5.1f}s{motivo}")
+        if falhas and ultima:
+            # A fala é sintética — cliente e telefone do próprio caso, não de PII real
+            # (invariante 5 não se aplica aqui). Sem isto, "nenhum de X/Y/Z" só diz o que
+            # NÃO foi dito; o log do CI passa a mostrar o que foi.
+            trecho = " ".join(ultima.split())[:220]
+            reticencias = "…" if len(ultima) > 220 else ""
+            print(f"     └─ {trecho}{reticencias}")
 
     passaram = sum(resultados.values())
     taxa = passaram / len(casos)

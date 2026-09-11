@@ -209,10 +209,10 @@ def test_so_o_turno_degradado_ganha_segunda_tentativa(
     monkeypatch.setattr("evals.rodar.conversar", conversar_falso)
 
     espera = {"reais_permitidos": ["249.990"]}
-    falhas, _ = rodar_caso({"id": "degradou", "espera": {}, "turnos": ["oi"]}, 1, 2)
+    falhas, _, _ = rodar_caso({"id": "degradou", "espera": {}, "turnos": ["oi"]}, 1, 2)
     assert falhas != [] and tentativas.count("degradou") == 2
 
-    falhas, _ = rodar_caso({"id": "mentiu", "espera": espera, "turnos": ["oi"]}, 2, 2)
+    falhas, _, _ = rodar_caso({"id": "mentiu", "espera": espera, "turnos": ["oi"]}, 2, 2)
     assert falhas != [] and tentativas.count("mentiu") == 1
 
 
@@ -227,7 +227,7 @@ def test_o_caso_que_explode_reprova_sozinho_e_sem_vazar_a_conversa(
 
     monkeypatch.setattr("evals.rodar.conversar", explodir)
 
-    falhas, _ = rodar_caso({"id": "x", "espera": {}, "turnos": ["oi"]}, 1, 2)
+    falhas, _, _ = rodar_caso({"id": "x", "espera": {}, "turnos": ["oi"]}, 1, 2)
     assert falhas == ["erro no caso: ValueError"]
     assert "5583988714471" not in " ".join(falhas)
 
@@ -270,5 +270,6 @@ def test_zero_tentativas_nao_aprova_caso_que_nunca_rodou(
 
     monkeypatch.setattr("evals.rodar.conversar", nunca_chamado)
 
-    falhas, _ = rodar_caso({"id": "x", "espera": {"reais_permitidos": []}, "turnos": ["oi"]}, 1, 0)
+    caso = {"id": "x", "espera": {"reais_permitidos": []}, "turnos": ["oi"]}
+    falhas, _, _ = rodar_caso(caso, 1, 0)
     assert falhas != []

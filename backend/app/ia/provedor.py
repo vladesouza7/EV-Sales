@@ -36,7 +36,12 @@ logger = logging.getLogger(__name__)
 
 TEMPO_LIMITE_S = 30
 TOKENS_MAXIMOS = 4_000  # S-03 §6
-TEMPERATURA = 0.3  # "a Aurora conversa, não escreve poesia" (ADR-008)
+# "a Aurora conversa, não escreve poesia" (ADR-008) — 0.3 é a voz da Aurora em produção,
+# e nada aqui a muda. A variável existe para o **eval**: portão de 100% sobre 28 gerações
+# amostradas é loteria, e foi por isso que `preco-03` e `inj-06` passaram numa execução e
+# reprovaram na seguinte sem uma linha de código ter mudado. Com 0, a mesma entrada dá a
+# mesma saída, e um vermelho passa a significar regressão em vez de azar.
+TEMPERATURA = float(os.environ.get("EVSALES_TEMPERATURA", "0.3"))
 
 VARIAVEL_PROVEDOR = "EVSALES_PROVEDOR"
 VARIAVEL_CHAVE = "EVSALES_LLM_API_KEY"

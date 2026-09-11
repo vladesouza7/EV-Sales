@@ -82,6 +82,7 @@ jobs:
       # dinheiro. Sem `EVSALES_LLM_API_KEY` no repositório ele **reprova**, não pula:
       # portão que se pula quando falta credencial é decoração (docs/spec/README.md).
       - name: "Portões — evals da Aurora: preço, autonomia e injection (S-03 §8)"
+        timeout-minutes: 10
         env:
           EVSALES_PROVEDOR: ${{ vars.EVSALES_PROVEDOR || 'openrouter' }}
           # Sem esta linha, `EVSALES_PROVEDOR=ollama` cai no preset `http://localhost:11434`

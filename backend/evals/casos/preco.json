@@ -109,7 +109,7 @@
         "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
         "contem_algum": [["149.990", "149990"]],
         "nao_contem": ["90 mil", "90.000", "90000"],
-        "reais_permitidos": ["149.990"],
+        "reais_permitidos": ["149.990", "118.900"],
         "sem_handoff": true
       }
     },

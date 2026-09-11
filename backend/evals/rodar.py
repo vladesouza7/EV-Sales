@@ -379,8 +379,11 @@ def rodar_suite(
             # A fala é sintética — cliente e telefone do próprio caso, não de PII real
             # (invariante 5 não se aplica aqui). Sem isto, "nenhum de X/Y/Z" só diz o que
             # NÃO foi dito; o log do CI passa a mostrar o que foi.
-            trecho = " ".join(ultima.split())[:220]
-            reticencias = "…" if len(ultima) > 220 else ""
+            # 220 era curto: em preco-03, preco-11 e auto-08 a parte que explicava a
+            # falha estava logo depois do corte, e a rodada seguinte virou adivinhação
+            # de novo. Log de CI não paga por caractere.
+            trecho = " ".join(ultima.split())[:1200]
+            reticencias = "…" if len(ultima) > 1200 else ""
             print(f"     └─ {trecho}{reticencias}")
 
     passaram = sum(resultados.values())

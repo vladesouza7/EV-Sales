@@ -37,7 +37,7 @@
       "espera": {
         "tools_algum": [["detalhar_unidade", "buscar_unidades"]],
         "contem_algum": [["confirmar", "não medida", "nao medida", "não tenho", "nao tenho"]],
-        "km_permitidos": ["31.000"],
+        "km_permitidos": ["31.000", "280", "291", "372", "481", "533", "28.400"],
         "sem_handoff": true
       }
     },

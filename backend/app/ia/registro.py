@@ -54,7 +54,10 @@ REGISTRO: dict[str, Tool] = {
         nome="buscar_unidades",
         descricao=(
             "Lista os carros disponíveis no pátio da Sol & Volt. Use sempre antes de "
-            "falar de preço, modelo ou disponibilidade. Devolve só o que está à venda."
+            "falar de preço, modelo ou disponibilidade. Devolve só o que está à venda. "
+            "NÃO existe filtro por marca ou modelo: para saber se um carro específico "
+            "está no pátio, chame SEM parâmetro nenhum e procure na lista que voltar. "
+            "Não afirme que um modelo não existe sem ter visto a lista completa."
         ),
         parametros=_objeto(
             {
@@ -62,7 +65,20 @@ REGISTRO: dict[str, Tool] = {
                     "type": "integer",
                     "description": "Teto de preço em centavos. R$ 150.000 é 15000000.",
                 },
-                "condicao": {"type": "string", "enum": ["novo", "seminovo"]},
+                # O filtro que escondia o pátio: metade do estoque é seminovo premium, e
+                # `condicao: novo` por conta própria deixava o Taycan e o Model Y de fora.
+                # A Aurora então dizia "trabalhamos com BYD e Chevrolet" — verdade sobre o
+                # que a tool devolveu, mentira sobre o pátio (S-03 §8: preco-06, preco-10,
+                # auto-02).
+                "condicao": {
+                    "type": "string",
+                    "enum": ["novo", "seminovo"],
+                    "description": (
+                        "Só quando o cliente disser que quer novo ou seminovo. Metade do "
+                        "pátio é seminovo premium: filtrar sem ele ter pedido esconde "
+                        "carro que existe. Na dúvida, omita."
+                    ),
+                },
                 "autonomia_min_km": {"type": "integer"},
             },
             [],

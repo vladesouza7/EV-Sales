@@ -125,6 +125,18 @@ def test_buscar_filtra_por_condicao(estoque: Session) -> None:
     assert {str(u["chassi"]) for u in achados} == {SEAL["chassi"]}
 
 
+def test_buscar_sem_filtro_devolve_o_patio_inteiro(estoque: Session) -> None:
+    """A tool sempre soube do seminovo — o filtro é que era escolha da Aurora.
+
+    No eval (S-03 §8: preco-06, preco-10, auto-02) ela chamava `condicao="novo"` por
+    conta própria, recebia só os novos e dizia que o Taycan não existia. Metade do
+    pátio é seminovo premium: um filtro padrão aqui esconderia estoque de verdade.
+    """
+    achados = buscar_unidades(estoque)
+    esperados = {str(SEAL["chassi"]), str(IONIQ["chassi"]), str(TAYCAN["chassi"])}
+    assert {str(u["chassi"]) for u in achados} == esperados
+
+
 def test_qualificacao_acumula_sem_apagar_o_que_ja_foi_respondido(
     sessao: Session, conversa: Conversa
 ) -> None:

@@ -244,6 +244,27 @@ def test_resposta_vazia_do_modelo_vira_atendimento_humano(
     assert conversa is not None and conversa.modo == "humano"
 
 
+def test_token_de_controle_vazado_vira_atendimento_humano(
+    cliente: TestClient, sessao: Session, provedor: ProvedorDuble
+) -> None:
+    """Provedor que não converteu a chamada em `tool_calls` e o modelo tentou de novo
+    em texto puro — visto ao vivo no eval (S-03 §8, caso auto-05). Cliente nunca vê a
+    sintaxe interna do modelo; mesmo tratamento do provedor fora do ar."""
+    conversa_id = _conversa_em(cliente, sessao, "qualificacao")
+    provedor.responder(
+        "Vou consultar para você:<｜tool▁calls▁begin｜>comparar_unidades"
+        '<｜tool▁sep｜>{"chassis": []}<｜tool▁calls▁end｜>'
+    )
+
+    cliente.post(f"/api/conversas/{conversa_id}/mensagens", json={"conteudo": "oi"})
+    eventos = _turno(sessao, conversa_id)
+
+    assert "｜" not in _texto(eventos)
+    sessao.expire_all()
+    conversa = sessao.get(Conversa, conversa_id)
+    assert conversa is not None and conversa.modo == "humano"
+
+
 def test_provedor_que_nao_fatura_grava_custo_desconhecido_e_avisa(
     cliente: TestClient, sessao: Session, provedor: ProvedorDuble
 ) -> None:

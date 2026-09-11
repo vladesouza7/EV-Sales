@@ -408,6 +408,18 @@ async def executar_turno(
             yield evento
         return
 
+    if "｜" in texto:
+        # `｜` (FULLWIDTH VERTICAL LINE) é o caractere dos tokens de controle nativos de
+        # tool-call de alguns modelos (`<｜tool▁calls▁begin｜>...`). Aparece na resposta
+        # final quando o provedor não converteu a chamada em `tool_calls` estruturado e
+        # o modelo tentou de novo em texto puro — visto ao vivo no eval (S-03 §8, caso
+        # auto-05), nunca em português natural. Cliente nunca vê sintaxe interna do
+        # modelo: degradar para humano é o mesmo tratamento do provedor fora do ar.
+        motivo = "resposta_com_token_de_controle"
+        for evento in _degradar(sessao, conversa, entrada, motivo, comeco):
+            yield evento
+        return
+
     permitidos = permitidos_de(fichas)
     veredito = verificar_numeros(texto, permitidos, do_cliente)
     tentativas = 0

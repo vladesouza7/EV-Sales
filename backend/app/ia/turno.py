@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 Evento = tuple[str, dict[str, object]]
 
-VERSAO_DO_PROMPT = "aurora_v1"
+VERSAO_DO_PROMPT = "aurora_v2"
 _PROMPT = (Path(__file__).parent / "prompts" / f"{VERSAO_DO_PROMPT}.md").read_text("utf-8")
 
 # S-03 §6 — os tetos do loop. Estourar não é erro: é o turno terminando com o que tem.
@@ -430,10 +430,16 @@ async def executar_turno(
         mensagens.append(
             {
                 "role": "user",
+                # "ou sem citar número nenhum" era porta de saída larga demais: o modelo
+                # regenerava apagando TODOS os preços, inclusive os certos, e respondia
+                # "temos o Dolphin Mini" sem dizer quanto custa (S-03 §8, preco-03 e
+                # preco-11). Tirar o número inventado não é emudecer sobre o catálogo — a
+                # saída sem número continua, mas só quando não há número de tool para dar.
                 "content": (
                     "Sua resposta citou números que não vieram de consulta nenhuma: "
-                    f"{', '.join(veredito.divergentes)}. Reescreva usando apenas os valores "
-                    "que as tools devolveram neste turno, ou sem citar número nenhum."
+                    f"{', '.join(veredito.divergentes)}. Reescreva mantendo os valores que "
+                    "as tools devolveram neste turno e tirando só esses. Se nenhuma tool "
+                    "devolveu número, responda sem citar número nenhum."
                 ),
             }
         )

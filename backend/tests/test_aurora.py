@@ -208,7 +208,7 @@ def test_o_turno_grava_a_versao_do_prompt_e_o_custo_do_provedor(
     turno = sessao.scalars(
         select(Trilha).where(Trilha.conversa_id == conversa_id, Trilha.tipo == "turno")
     ).one()
-    assert turno.dados["versao_do_prompt"] == "aurora_v1"
+    assert turno.dados["versao_do_prompt"] == "aurora_v2"
     assert turno.custo_micro_reais == 3_200
 
 

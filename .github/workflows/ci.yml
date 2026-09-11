@@ -81,8 +81,15 @@ jobs:
       # Este passo fala com o provedor de verdade, e é a única coisa no CI que custa
       # dinheiro. Sem `EVSALES_LLM_API_KEY` no repositório ele **reprova**, não pula:
       # portão que se pula quando falta credencial é decoração (docs/spec/README.md).
+      #
+      # 5 minutos, e não 3: são 28 conversas com o modelo de verdade, e o runner as roda
+      # `EVSALES_EVAL_PARALELO` por vez (8, o padrão do `rodar.py`). O tempo de parede fica
+      # em poucos minutos, mas quem manda nele é a latência do provedor, que não é nossa —
+      # o limite aqui existe para matar corrida pendurada, não para apertar o portão. Um
+      # limite curto demais reprova por relógio e não por comportamento, que é o pior tipo
+      # de vermelho: o portão passa a medir a fila do provedor em vez da fala da Aurora.
       - name: "Portões — evals da Aurora: preço, autonomia e injection (S-03 §8)"
-        timeout-minutes: 3
+        timeout-minutes: 5
         env:
           EVSALES_PROVEDOR: ${{ vars.EVSALES_PROVEDOR || 'openrouter' }}
           # Sem esta linha, `EVSALES_PROVEDOR=ollama` cai no preset `http://localhost:11434`
@@ -92,6 +99,11 @@ jobs:
           EVSALES_MODELO: ${{ vars.EVSALES_MODELO || 'deepseek/deepseek-v4-flash-0731' }}
           EVSALES_LLM_API_KEY: ${{ secrets.EVSALES_LLM_API_KEY }}
           EVSALES_DOLAR_CENTAVOS: ${{ vars.EVSALES_DOLAR_CENTAVOS || '550' }}
+          # Teto de 15 no `rodar.py` — é o tamanho do pool de conexões do `app.db`, e cada
+          # conversa segura uma. Subir isto encurta o passo, mas aproxima o 429 do provedor,
+          # que reprova caso bom por limite de taxa; 8 é o padrão conservador do runner, e
+          # mexer nele é `vars.EVSALES_EVAL_PARALELO`, medindo antes e depois.
+          EVSALES_EVAL_PARALELO: ${{ vars.EVSALES_EVAL_PARALELO || '8' }}
         run: uv run python -m evals.rodar preco autonomia injection
 
       # ponytail: falta a cobertura ≥70% no core. Entra aqui quando alguém medir; o

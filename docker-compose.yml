@@ -20,7 +20,11 @@ services:
   # do nginx. O que protege o Espelho não é a porta fechada — é o bucket privado e a
   # validação de prefixo na única rota que recebe nome vindo de fora.
   minio:
-    image: minio/minio
+    # `minio/minio` saiu do Docker Hub: o pull responde "repository does not exist"
+    # mesmo sem login, e derrubou o CI no passo que sobe os serviços. O quay.io é o
+    # outro registro que a própria MinIO publica. Tag fixa, e não `latest`, porque foi
+    # exatamente a tag flutuante que fez isso virar surpresa num dia qualquer.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     ports: ["9000:9000", "9001:9001"]
     environment:

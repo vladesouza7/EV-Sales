@@ -89,7 +89,13 @@ jobs:
       # limite curto demais reprova por relógio e não por comportamento, que é o pior tipo
       # de vermelho: o portão passa a medir a fila do provedor em vez da fala da Aurora.
       - name: "Portões — evals da Aurora: preço, autonomia e injection (S-03 §8)"
-        timeout-minutes: 4
+        # 4 minutos era curto: na primeira execução com o modelo v3.1, `preco` levou 54s e
+        # `autonomia` 43s, e o relógio estourou com `injection` no meio — a suíte mais
+        # importante das três ficou SEM VEREDITO, que é pior do que reprovar. O eval em si
+        # roda em ~3 min com paralelismo 8; o que varia é a fila do provedor, não o código.
+        # 15 min dá folga para essa variação e ainda mata job pendurado antes de virar
+        # conta. Se um dia bater neste limite, o problema é o provedor, não a Aurora.
+        timeout-minutes: 15
         env:
           EVSALES_PROVEDOR: ${{ vars.EVSALES_PROVEDOR || 'openrouter' }}
           # Sem esta linha, `EVSALES_PROVEDOR=ollama` cai no preset `http://localhost:11434`

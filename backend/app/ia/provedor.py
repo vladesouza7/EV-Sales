@@ -76,7 +76,7 @@ PRESETS: dict[str, Preset] = {
         # local estimando o que o Raí paga. ADR-007: é o `data_collection` que torna o
         # OpenRouter aceitável para a conversa de um cliente da Sol & Volt.
         extras={"usage": {"include": True}, "provider": {"data_collection": "deny"}},
-        cabecalhos={"X-Title": "EV-Sales — Sol & Volt"},
+        cabecalhos={"X-Title": "EV-Sales - Sol & Volt"},
     ),
     "ollama": Preset(
         base="http://localhost:11434/v1",

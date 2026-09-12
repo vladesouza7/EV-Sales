@@ -236,7 +236,8 @@ de acesso ali seria a própria porta que a invariante 2 existe para fechar. Todo
 **Estado da implementação:** o quadro por spec fica em
 [docs/spec/README.md](docs/spec/README.md#as-specs). Em resumo: a jornada inteira está de pé —
 landing, chat, a Aurora com verificação numérica, a fila da Neuza, a reserva de chassi, o handoff
-para o WhatsApp, o test drive com desfecho, o trace e os cinco portões de CI. O que falta são
+para o WhatsApp, o test drive com desfecho, o trace e os cinco portões de CI — dois deles
+bloqueando o merge e três informando ([ADR-015](docs/adr/ADR-015-evals-informam-o-merge-nao-o-bloqueiam.md)). O que falta são
 bordas nomeadas em cada spec: o Langfuse como segunda leitura, a retenção de PII, o dossiê do
 vendedor e as duas tools que a Aurora ainda não tem.
 

@@ -67,9 +67,17 @@ passam a existir.
 | [S-11](S-11-autenticacao-e-perfis.md) | Autenticação e perfis | Login, sessão, o que cada perfil alcança | ◐ parcial — login, sessão e perfis sim; as telas são da S-04 e da S-08 | |
 | [S-12](S-12-configuracoes.md) | Configurações | Credencial e número sem `ssh`, cifrados | ◐ parcial — tela, rotas e leitor sim; o estado da instância na tela não | |
 
-Os cinco ✅ são os portões que **reprovam o build**. Eles existem porque risco sem verificação
-automatizada é desejo, não requisito: enquanto o eval não bloqueia o merge, o ADR envelhece em
-silêncio dizendo que está tudo mitigado.
+Os cinco ✅ existem e rodam em todo PR. **Dois deles bloqueiam o merge; três informam** — o
+`ci.yml` tem dois jobs, e a divisão é por do que cada um depende para dar veredito
+([ADR-015](../adr/ADR-015-evals-informam-o-merge-nao-o-bloqueiam.md)). A concorrência de reserva e
+a varredura de PII dependem só deste repositório, e seguram o botão. Os três evals dependem de um
+provedor de LLM terceiro, que varia entre execuções idênticas e cobra por chamada: reprovam,
+aparecem vermelhos no PR com o caso e a fala do modelo, e não seguram nada.
+
+Isso **é** uma redução de rigor, e o ADR-015 a assume com prazo: três gatilhos escritos para voltar
+a bloquear, o primeiro deles sendo o EV-Sales atender um cliente de verdade. A frase que criou os
+portões continua valendo — risco sem verificação automatizada é desejo, não requisito —, e por isso
+nenhum limiar caiu: as três suítes seguem exigindo 100%, e nenhum caso virou `skip`.
 
 **Os cinco existem hoje**, e todos foram aceitos do mesmo jeito — rodando contra um erro de
 propósito, porque portão que não reprova o código errado é decoração:
@@ -85,13 +93,15 @@ propósito, porque portão que não reprova o código errado é decoração:
   defeito que faltava — três casos de injection passavam sem o modelo ter falado, porque a frase
   de degradação não contém percentual nenhum. Turno degradado hoje reprova.
 
-**Falta um segredo, não código.** O passo do eval no CI fala com o provedor de verdade: sem
-`EVSALES_LLM_API_KEY` configurado no repositório ele reprova, de propósito. É o único portão que
-custa dinheiro por execução.
+**Falta um segredo, não código.** O job `evals` fala com o provedor de verdade: sem
+`EVSALES_LLM_API_KEY` configurado no repositório ele reprova, de propósito — pular quando falta
+credencial é decoração. É a única coisa no CI que custa dinheiro por execução.
 
-O CI que executa os portões é entrega da [S-10 §7](S-10-operacao.md) e está em
-`.github/workflows/ci.yml`: `main` protegida, PR obrigatório, e um portão vermelho bloqueia o
-merge de verdade.
+O CI é entrega da [S-10 §7](S-10-operacao.md) e está em `.github/workflows/ci.yml`. Duas
+observações honestas sobre o que ele garante hoje: a proteção da `main` está descrita aqui como
+intenção e **ainda não foi ligada** nas configurações do repositório — quando for, o job a marcar
+como obrigatório é o `portoes`. E informar não é ignorar: ler o vermelho do `evals` é obrigação de
+quem abre o PR.
 
 ## Como uma spec vira código neste repositório
 

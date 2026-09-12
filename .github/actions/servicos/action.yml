@@ -1,0 +1,24 @@
+# Os serviços são os do próprio `docker-compose.yml`: definir postgres e minio outra vez
+# aqui criaria uma segunda verdade, e é a segunda que envelhece. Esta ação existe porque
+# dois jobs precisam da mesma subida, e o GitHub não aceita âncora de YAML.
+name: Postgres e MinIO
+description: Sobe os serviços do docker-compose.yml com o .env que o CI precisa.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        cp .env.example .env
+        # Também exercita o script da S-10 §2 — e a Evolution exige a chave dela para o
+        # compose sequer interpolar, o que é o modo certo de falhar.
+        ./scripts/gerar-segredos.sh
+        # O volume do postgres nasce com a senha do `.env`, e a suíte conecta pela URL
+        # padrão do `conftest` — `evsales:evsales`. Sem esta linha o container sobe com o
+        # placeholder `troque-esta-senha` do `.env.example` e **todos** os testes falham
+        # na autenticação. É a mesma troca que o `subir-dev.sh` faz na máquina de quem
+        # desenvolve, pelo mesmo motivo; o placeholder existe para o humano trocar.
+        sed -i 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=evsales|' .env
+        docker compose up -d postgres minio
+        timeout 120 bash -c 'until docker compose exec -T postgres pg_isready -U evsales; do sleep 1; done'
+        timeout 120 bash -c 'until curl -sf localhost:9000/minio/health/live; do sleep 1; done'

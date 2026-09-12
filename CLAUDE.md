@@ -74,17 +74,30 @@ Os critérios de aceite em Gherkin viram testes, e os testes vêm antes da imple
 - Migrations Alembic com `downgrade` que funciona.
 - Type hints obrigatórios no backend; `mypy` e `ruff` bloqueiam o CI.
 
-## O que o CI bloqueia
+## O que o CI bloqueia, e o que ele só informa
 
-Cinco portões reprovam o merge, e nenhum tem exceção manual:
+O `ci.yml` tem dois jobs, e a divisão é por **do que cada um depende para dar veredito**
+([ADR-015](docs/adr/ADR-015-evals-informam-o-merge-nao-o-bloqueiam.md)).
+
+**`portoes` — bloqueia.** Depende só deste repositório: mesma entrada, mesma saída, sempre.
 
 | Portão | Spec |
 |---|---|
-| Eval de preço e estoque — 100% | [S-03](docs/spec/S-03-agente-aurora.md) |
-| Eval de autonomia e fonte — 100% | [S-03](docs/spec/S-03-agente-aurora.md) |
-| Eval de injection — 100% | [S-03](docs/spec/S-03-agente-aurora.md) |
 | Teste de concorrência de reserva — 1 vencedor em 50 | [S-05](docs/spec/S-05-reserva-de-chassi.md) |
 | Varredura de PII nos logs — 0 ocorrências | [S-09](docs/spec/S-09-protecao-de-pii.md) |
+| `ruff`, `mypy app`, migrations nos dois sentidos, a suíte inteira | [S-10](docs/spec/S-10-operacao.md) |
+
+**`evals` — informa.** Depende de um provedor de LLM terceiro, que varia entre execuções
+idênticas e cobra por chamada.
+
+| Eval | Spec |
+|---|---|
+| Preço e estoque — 100% | [S-03](docs/spec/S-03-agente-aurora.md) |
+| Autonomia e fonte — 100% | [S-03](docs/spec/S-03-agente-aurora.md) |
+| Injection — 100% | [S-03](docs/spec/S-03-agente-aurora.md) |
+
+Informar não é ignorar. O vermelho aparece no PR com o caso e a fala do modelo, e lê-lo é
+obrigação de quem abre o PR — o ADR-015 tem três gatilhos escritos para voltar a bloquear.
 
 **Nunca desabilite, marque como `skip` ou afrouxe um desses testes para fazer o build passar.** Se
 um deles falhar, o código está errado — não o teste. Se você acredita que o teste está errado,
@@ -123,7 +136,7 @@ corrigir o que encontra**. Revisor que conserta virou autor, e autor não revisa
 3. Implementação com a spec no contexto.
 4. `/verificar-spec` em sessão limpa; veredito anexado ao PR.
 5. `/revisar-risco` sobre o diff.
-6. CI verde, com os cinco portões.
+6. `portoes` verde; `evals` lido, mesmo quando vermelho (ADR-015).
 7. Revisão humana minha no PR — obrigatória nos arquivos da tabela acima.
 
 `main` é protegida: sem push direto, PR obrigatório.

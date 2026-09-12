@@ -11,7 +11,11 @@ de chave.
 """
 
 import json
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sqlalchemy.orm import Session
@@ -24,6 +28,8 @@ from evals.rodar import (
     conferir,
     conversar,
     preparar,
+    rodar_caso,
+    rodar_suite,
 )
 
 from .dubles import ProvedorDuble
@@ -165,3 +171,105 @@ def test_o_runner_atravessa_uma_conversa_inteira(
         )
         == []
     )
+
+
+@pytest.fixture
+def sem_banco(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`rodar_caso` abre a sessão dele; aqui a conversa é dublê e nada é gravado.
+
+    A sessão falsa é o que separa estes testes do banco: o que está sob prova é o
+    encanamento do paralelismo, não o turno — esse já tem o teste da conversa inteira.
+    """
+
+    @contextmanager
+    def sessao_falsa(_engine: object) -> Iterator[object]:
+        yield object()
+
+    monkeypatch.setattr("evals.rodar.Session", sessao_falsa)
+
+
+def test_so_o_turno_degradado_ganha_segunda_tentativa(
+    sem_banco: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A regra que impede a repetição de virar afrouxamento do portão.
+
+    Degradado é o provedor não tendo respondido — ausência de informação, e repetir é o
+    certo. Reprovado é a Aurora tendo falado errado — resultado, e resultado que se repete
+    até passar não é portão, é sorteio. Se alguém trocar a condição por `if falhas`, os
+    três portões da S-03 §8 passam a tolerar o preço inventado na segunda tentativa.
+    """
+    tentativas: list[str] = []
+
+    def conversar_falso(sessao: object, caso: dict[str, Any], indice: int) -> Execucao:
+        tentativas.append(caso["id"])
+        if caso["id"] == "degradou":
+            return Execucao(falas=[MENSAGEM_NO_TETO], degradou=True)
+        return Execucao(falas=["Sai por R$ 219.990."])
+
+    monkeypatch.setattr("evals.rodar.conversar", conversar_falso)
+
+    espera = {"reais_permitidos": ["249.990"]}
+    falhas, _, _ = rodar_caso({"id": "degradou", "espera": {}, "turnos": ["oi"]}, 1, 2)
+    assert falhas != [] and tentativas.count("degradou") == 2
+
+    falhas, _, _ = rodar_caso({"id": "mentiu", "espera": espera, "turnos": ["oi"]}, 2, 2)
+    assert falhas != [] and tentativas.count("mentiu") == 1
+
+
+def test_o_caso_que_explode_reprova_sozinho_e_sem_vazar_a_conversa(
+    sem_banco: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Um caso que levanta não pode derrubar o veredito dos outros 27 — nem contar o que
+    estava na conversa: mensagem de exceção acaba em log, e a conversa tem PII."""
+
+    def explodir(sessao: object, caso: dict[str, Any], indice: int) -> Execucao:
+        raise ValueError("Neuza, +5583988714471")
+
+    monkeypatch.setattr("evals.rodar.conversar", explodir)
+
+    falhas, _, _ = rodar_caso({"id": "x", "espera": {}, "turnos": ["oi"]}, 1, 2)
+    assert falhas == ["erro no caso: ValueError"]
+    assert "5583988714471" not in " ".join(falhas)
+
+
+def test_a_suite_roda_em_paralelo_e_relata_na_ordem_do_arquivo(
+    sem_banco: None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """As duas metades do motivo de este runner existir.
+
+    A barreira prova o paralelismo sem cronômetro: em série ela nunca completa e cada caso
+    volta com `BrokenBarrierError`. A ordem do relatório é o resto — ela é do arquivo, não
+    de quem terminou primeiro, senão o relatório de hoje não se compara com o de ontem.
+    """
+    paralelo = 4
+    barreira = threading.Barrier(paralelo, timeout=10)
+
+    def conversar_falso(sessao: object, caso: dict[str, Any], indice: int) -> Execucao:
+        barreira.wait()
+        return Execucao(falas=["ok"])
+
+    monkeypatch.setattr("evals.rodar.conversar", conversar_falso)
+    monkeypatch.setattr("evals.rodar.conferir", lambda espera, execucao: [])
+
+    aprovada, resultados = rodar_suite(CASOS / "injection.json", 1, paralelo, 1)
+
+    suite = json.loads((CASOS / "injection.json").read_text("utf-8"))
+    ids = [caso["id"] for caso in suite["casos"]]
+    assert aprovada and all(resultados.values())
+    assert list(resultados) == ids
+    assert "8 casos" in capsys.readouterr().out
+
+
+def test_zero_tentativas_nao_aprova_caso_que_nunca_rodou(
+    sem_banco: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--tentativas 0` não pode ser o jeito silencioso de um portão de 100% passar."""
+
+    def nunca_chamado(sessao: object, caso: dict[str, Any], indice: int) -> Execucao:
+        return Execucao(falas=["Sai por R$ 219.990."])
+
+    monkeypatch.setattr("evals.rodar.conversar", nunca_chamado)
+
+    caso = {"id": "x", "espera": {"reais_permitidos": []}, "turnos": ["oi"]}
+    falhas, _, _ = rodar_caso(caso, 1, 0)
+    assert falhas != []

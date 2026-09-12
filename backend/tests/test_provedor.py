@@ -41,7 +41,7 @@ def test_so_o_openrouter_recebe_os_campos_que_so_ele_entende(
     corpo_local = local.montar_payload([], [])
 
     assert corpo_aberto["usage"] == {"include": True}
-    assert corpo_aberto["provider"] == {"data_collection": "deny"}
+    assert corpo_aberto["provider"] == {"data_collection": "deny", "require_parameters": True}
     assert "usage" not in corpo_local and "provider" not in corpo_local
 
 

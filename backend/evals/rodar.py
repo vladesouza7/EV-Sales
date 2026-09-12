@@ -30,6 +30,7 @@ Uso:
 
     uv run python -m evals.rodar                    # as seis suítes
     uv run python -m evals.rodar preco autonomia    # só as que interessam agora
+    uv run python -m evals.rodar --paralelo 1       # uma conversa por vez, para depurar
 """
 
 import argparse
@@ -38,7 +39,9 @@ import base64
 import json
 import os
 import sys
+import time
 from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -63,7 +66,7 @@ from sqlalchemy.dialects.postgresql import insert  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db import Base, engine  # noqa: E402
-from app.ia.provedor import ProvedorCompativel  # noqa: E402
+from app.ia.provedor import PRESETS, ProvedorCompativel  # noqa: E402
 from app.ia.tools.conhecimento import ITENS_CONHECIMENTO  # noqa: E402
 from app.ia.turno import Evento, executar_turno  # noqa: E402
 
@@ -120,6 +123,23 @@ COMPARATIVOS = (
 # devolve essa frase no `aviso` — sem esta janela o eval reprovaria a resposta certa.
 NEGACOES = ("nao ", "nem ", "sem ", "impossivel", "evitar", "errado", "difici")
 JANELA_DA_NEGACAO = 60
+
+# Os casos rodam em paralelo, e não por gosto de velocidade: em série, os 28 casos dos três
+# portões são ~70 idas ao provedor uma atrás da outra — o passo do CI batia no limite de
+# tempo antes de chegar ao veredito, e portão que não termina não é portão.
+#
+# Paralelizar aqui é seguro porque **conversa não conhece conversa**: cada caso tem lead,
+# telefone e sessão próprios, e o que eles compartilham é o catálogo, que ninguém escreve.
+# O que NÃO é seguro é compartilhar a `Session` — daí uma por caso.
+PARALELO_PADRAO = 8
+# O `app.db` cria o engine com o pool padrão do SQLAlchemy: 5 conexões, 10 de overflow. Cada
+# caso segura uma conexão do começo ao fim, então pedir mais de 15 ao mesmo tempo não roda
+# mais rápido — fica na fila do pool, e estoura com `TimeoutError` depois de 30 s.
+LIMITE_DE_CONEXOES = 15
+# Segunda tentativa **só** para o turno degradado, e é por isso que ela não afrouxa o
+# portão: degradado é o provedor não tendo respondido, que é ausência de informação, não
+# conduta da Aurora. Falha de conteúdo é resultado, e resultado não se repete até passar.
+TENTATIVAS_PADRAO = 2
 
 
 @dataclass
@@ -292,26 +312,88 @@ def conferir(espera: dict[str, Any], r: Execucao) -> list[str]:
     return falhas
 
 
-def rodar_suite(sessao: Session, arquivo: Path, primeiro: int) -> tuple[bool, dict[str, bool]]:
+def rodar_caso(
+    caso: dict[str, Any], indice: int, tentativas: int
+) -> tuple[list[str], float, str]:
+    """Um caso inteiro, na sessão dele. É esta função que roda em paralelo.
+
+    Sessão por caso e não uma compartilhada: a `Session` do SQLAlchemy não é segura entre
+    threads, e duas conversas gravando na mesma identity map se pisam de um jeito que só
+    aparece sob concorrência — que é exatamente o que este runner passou a fazer.
+    """
+    comeco = time.monotonic()
+    falhas: list[str] = []
+    # `max(1, ...)`: com `--tentativas 0` o laço não rodaria e o caso voltaria sem falha
+    # nenhuma — um portão de 100% aprovando 28 conversas que nunca aconteceram.
+    ultima = ""
+    for tentativa in range(1, max(1, tentativas) + 1):
+        try:
+            with Session(engine) as sessao:
+                execucao = conversar(sessao, caso, indice)
+        except Exception as erro:
+            # Só o tipo da exceção: a conversa do caso carrega nome e telefone, e mensagem
+            # de exceção acaba em log (invariante 5). Um caso que explode reprova sozinho,
+            # em vez de derrubar a suíte inteira antes do veredito dos outros 27.
+            return [f"erro no caso: {type(erro).__name__}"], time.monotonic() - comeco, ""
+        falhas = conferir(caso["espera"], execucao)
+        ultima = execucao.ultima
+        if not execucao.degradou or tentativa == tentativas:
+            break
+    # A conversa é sintética (cliente e telefone inventados pelo próprio caso — não é a
+    # invariante 5 em jogo), e sem a fala real todo caso que reprova por "nenhum de
+    # X/Y/Z" vira adivinhar qual sinônimo falta. Foi assim que inj-02 ficou reprovando
+    # depois de duas rodadas de sinônimo às cegas.
+    return falhas, time.monotonic() - comeco, ultima
+
+
+def rodar_suite(
+    arquivo: Path, primeiro: int, paralelo: int, tentativas: int
+) -> tuple[bool, dict[str, bool]]:
     suite = json.loads(arquivo.read_text("utf-8"))
     casos = suite["casos"]
     exigido = float(suite["aprovacao"])
     portao = " · PORTÃO DE CI" if suite.get("portao") else ""
-    print(f"\n── {suite['nome']} · {len(casos)} casos · exige {exigido:.0%}{portao}")
+    print(
+        f"\n── {suite['nome']} · {len(casos)} casos · exige {exigido:.0%}{portao}"
+        f" · {paralelo} em paralelo",
+        flush=True,
+    )
+
+    comeco = time.monotonic()
+    # `submit` numa lista e `result()` na ordem: o relatório sai na ordem do arquivo,
+    # independentemente de qual conversa terminou primeiro. Portão cujo relatório muda de
+    # ordem a cada execução é portão que ninguém consegue comparar com o de ontem.
+    with ThreadPoolExecutor(max_workers=paralelo) as executor:
+        futuros = [
+            executor.submit(rodar_caso, caso, primeiro + posicao, tentativas)
+            for posicao, caso in enumerate(casos)
+        ]
+        saidas = [futuro.result() for futuro in futuros]
 
     resultados: dict[str, bool] = {}
-    for posicao, caso in enumerate(casos):
-        falhas = conferir(caso["espera"], conversar(sessao, caso, primeiro + posicao))
+    for caso, (falhas, segundos, ultima) in zip(casos, saidas, strict=True):
         resultados[caso["id"]] = not falhas
-        if falhas:
-            print(f"   ✗ {caso['id']} — {'; '.join(falhas)}")
-        else:
-            print(f"   ✔ {caso['id']}")
+        motivo = f" — {'; '.join(falhas)}" if falhas else ""
+        print(f"   {'✗' if falhas else '✔'} {caso['id']} · {segundos:5.1f}s{motivo}")
+        if falhas and ultima:
+            # A fala é sintética — cliente e telefone do próprio caso, não de PII real
+            # (invariante 5 não se aplica aqui). Sem isto, "nenhum de X/Y/Z" só diz o que
+            # NÃO foi dito; o log do CI passa a mostrar o que foi.
+            # 220 era curto: em preco-03, preco-11 e auto-08 a parte que explicava a
+            # falha estava logo depois do corte, e a rodada seguinte virou adivinhação
+            # de novo. Log de CI não paga por caractere.
+            trecho = " ".join(ultima.split())[:1200]
+            reticencias = "…" if len(ultima) > 1200 else ""
+            print(f"     └─ {trecho}{reticencias}")
 
     passaram = sum(resultados.values())
     taxa = passaram / len(casos)
     aprovada = taxa >= exigido
-    print(f"   {passaram}/{len(casos)} · {taxa:.0%} · {'APROVADA' if aprovada else 'REPROVADA'}")
+    print(
+        f"   {passaram}/{len(casos)} · {taxa:.0%} · {'APROVADA' if aprovada else 'REPROVADA'}"
+        f" · {time.monotonic() - comeco:.0f}s",
+        flush=True,
+    )
     return aprovada, resultados
 
 
@@ -354,6 +436,18 @@ def main() -> int:
     argumentos.add_argument("suites", nargs="*", choices=disponiveis, default=disponiveis)
     argumentos.add_argument("--forcar", action="store_true", help="banco sem 'test' no nome")
     argumentos.add_argument(
+        "--paralelo",
+        type=int,
+        default=int(os.environ.get("EVSALES_EVAL_PARALELO") or PARALELO_PADRAO),
+        help=f"conversas ao mesmo tempo (padrão {PARALELO_PADRAO}; 1 para depurar)",
+    )
+    argumentos.add_argument(
+        "--tentativas",
+        type=int,
+        default=TENTATIVAS_PADRAO,
+        help="tentativas por caso, e só quando o turno degrada por falta de resposta",
+    )
+    argumentos.add_argument(
         "--gravar",
         action="store_true",
         help="compara caso por caso com a última execução gravada e regrava",
@@ -367,32 +461,60 @@ def main() -> int:
 
     provedor = ProvedorCompativel()
     if not provedor.configurado():
+        # Nomear o que falta, e não "faltam o modelo e a chave" para todo caso: a mensagem
+        # genérica culpava o modelo quando o vazio era a URL, e quem lê o log do CI não tem
+        # como abrir o `configurado()` para descobrir qual dos três é.
+        faltando = []
+        if not provedor.conhecido:
+            faltando.append(
+                f"EVSALES_PROVEDOR={provedor.nome!r} não está na tabela "
+                f"({', '.join(sorted(PRESETS))})"
+            )
+        if provedor.preset.exige_chave and not provedor.chave:
+            faltando.append("EVSALES_LLM_API_KEY")
+        if not provedor.modelo:
+            faltando.append("EVSALES_MODELO")
+        if not provedor.url:
+            faltando.append("EVSALES_LLM_URL — o preset deste provedor não traz base própria")
         print(
             "provedor de LLM não configurado (ADR-012), e este eval fala com o modelo de "
-            f"verdade: faltam EVSALES_MODELO e a chave do provedor {provedor.nome!r}."
+            f"verdade. Provedor {provedor.nome!r}; falta: {'; '.join(faltando)}."
         )
         return 2
     print(f"provedor {provedor.nome} · modelo {provedor.modelo} · banco {banco}")
 
+    paralelo = max(1, min(opcoes.paralelo, LIMITE_DE_CONEXOES))
+    if paralelo != opcoes.paralelo:
+        print(
+            f"paralelismo de {opcoes.paralelo} reduzido para {paralelo}: o pool de conexões "
+            f"do app tem {LIMITE_DE_CONEXOES}, e cada conversa segura uma."
+        )
+
+    comeco = time.monotonic()
     reprovadas: list[str] = []
     execucao: dict[str, dict[str, bool]] = {}
+    # O preparo é serial de propósito: ele limpa as tabelas e semeia o catálogo, e nenhuma
+    # conversa pode começar antes de ele terminar.
     with Session(engine) as sessao:
         preparar(sessao)
-        indice = 1
-        for nome in opcoes.suites:
-            aprovada, resultados = rodar_suite(sessao, CASOS / f"{nome}.json", indice)
-            execucao[nome] = resultados
-            indice += len(resultados)
-            if not aprovada:
-                reprovadas.append(nome)
+    indice = 1
+    for nome in opcoes.suites:
+        aprovada, resultados = rodar_suite(
+            CASOS / f"{nome}.json", indice, paralelo, opcoes.tentativas
+        )
+        execucao[nome] = resultados
+        indice += len(resultados)
+        if not aprovada:
+            reprovadas.append(nome)
 
     if opcoes.gravar:
         comparar_com_o_gravado(execucao)
 
+    total = f"{time.monotonic() - comeco:.0f}s no total"
     if reprovadas:
-        print(f"\nreprovado: {', '.join(reprovadas)}")
+        print(f"\nreprovado: {', '.join(reprovadas)} · {total}")
         return 1
-    print("\ntodas as suítes aprovadas")
+    print(f"\ntodas as suítes aprovadas · {total}")
     return 0
 
 

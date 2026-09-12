@@ -87,7 +87,7 @@ def atendimento(sessao: Session) -> uuid.UUID:
     )  # fmt: skip
     registrar(
         sessao, conversa.id, "turno", "aurora",
-        dados={"etapa": "recomendacao", "modelo": "gpt-oss:120b", "versao_do_prompt": "aurora_v1"},
+        dados={"etapa": "recomendacao", "modelo": "gpt-oss:120b", "versao_do_prompt": "aurora_v2"},
         duracao_ms=2100, custo_micro_reais=450_000,  # R$ 0,45 — o alvo por conversa da spec
     )  # fmt: skip
     return conversa.id
@@ -158,7 +158,7 @@ def test_o_rodape_traz_custo_duracao_e_a_versao_do_prompt(
     assert rodape["custo"] == "R$ 0,45"
     assert rodape["turnos"] == 1
     assert rodape["modelo"] == "gpt-oss:120b"
-    assert rodape["versao_do_prompt"] == "aurora_v1"
+    assert rodape["versao_do_prompt"] == "aurora_v2"
     assert rodape["duracao_min"] == 9
 
 

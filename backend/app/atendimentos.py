@@ -52,6 +52,10 @@ def _da_tool(nome: str, dados: dict[str, object]) -> str | None:
     """A linha ⚙ — onde o número veio de fora do modelo."""
     retorno = dados.get("retorno")
     if nome == "buscar_unidades":
+        # Lista crua ou `{"unidades": [...], "aviso": ...}`: o retorno ganhou o aviso de
+        # fontes misturadas, e a trilha do Raí não pode passar a dizer "0 carros" por isso.
+        if isinstance(retorno, dict):
+            retorno = retorno.get("unidades")
         quantidade = len(retorno) if isinstance(retorno, list) else 0
         return f"consultou o estoque → {quantidade} carro(s) disponível(is)"
     if nome == "detalhar_unidade":

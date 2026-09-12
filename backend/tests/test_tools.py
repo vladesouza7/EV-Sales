@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.core.pii import cifrar, hash_telefone
 from app.db import agora
-from app.ia.tools.estoque import buscar_unidades, comparar_unidades, detalhar_unidade
+from app.ia.tools.estoque import (
+    buscar_unidades,
+    comparar_unidades,
+    detalhar_unidade,
+    listar_para_o_modelo,
+)
 from app.ia.tools.qualificacao import registrar_qualificacao, transferir_para_humano
 from app.modelos import Conversa, Lead, Unidade
 
@@ -123,6 +128,47 @@ def test_buscar_filtra_por_preco_maximo(estoque: Session) -> None:
 def test_buscar_filtra_por_condicao(estoque: Session) -> None:
     achados = buscar_unidades(estoque, condicao="novo")
     assert {str(u["chassi"]) for u in achados} == {SEAL["chassi"]}
+
+
+def test_buscar_sem_filtro_devolve_o_patio_inteiro(estoque: Session) -> None:
+    """A tool sempre soube do seminovo — o filtro é que era escolha da Aurora.
+
+    No eval (S-03 §8: preco-06, preco-10, auto-02) ela chamava `condicao="novo"` por
+    conta própria, recebia só os novos e dizia que o Taycan não existia. Metade do
+    pátio é seminovo premium: um filtro padrão aqui esconderia estoque de verdade.
+    """
+    achados = buscar_unidades(estoque)
+    esperados = {str(SEAL["chassi"]), str(IONIQ["chassi"]), str(TAYCAN["chassi"])}
+    assert {str(u["chassi"]) for u in achados} == esperados
+
+
+def test_listagem_com_fontes_misturadas_avisa_que_nao_da_pra_comparar(
+    estoque: Session,
+) -> None:
+    """A `comparar_unidades` já recusava; a listagem não avisava nada.
+
+    O pátio tem Inmetro e WLTP juntos, e sem o aviso a Aurora disse "mais autonomia"
+    entre um 533 WLTP e um 481 Inmetro (S-03 §8, auto-08). A invariante 6 é a única que
+    a verificação numérica não pega: ali os números estão certos e o erro é a comparação.
+    """
+    resultado = listar_para_o_modelo(buscar_unidades(estoque))
+
+    assert resultado["autonomia_comparavel"] is False
+    aviso = str(resultado["aviso"])
+    assert "não podem ser comparadas" in aviso and "não diga qual roda mais" in aviso
+    assert len(list(resultado["unidades"])) == 3  # type: ignore[arg-type]
+
+
+def test_listagem_de_uma_fonte_so_nao_inventa_aviso(estoque: Session) -> None:
+    """Aviso que aparece sempre é aviso que ninguém lê."""
+    resultado = listar_para_o_modelo(buscar_unidades(estoque, condicao="novo"))
+
+    assert resultado["autonomia_comparavel"] is True and resultado["aviso"] is None
+
+
+def test_o_catalogo_publico_nao_recebe_o_aviso(estoque: Session) -> None:
+    """S-01 §6 — a tela e o MCP continuam com a lista crua. Aviso é conduta, não dado."""
+    assert isinstance(buscar_unidades(estoque), list)
 
 
 def test_qualificacao_acumula_sem_apagar_o_que_ja_foi_respondido(

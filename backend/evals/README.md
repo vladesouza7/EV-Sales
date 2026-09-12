@@ -21,6 +21,7 @@ export EVSALES_MODELO=... EVSALES_LLM_API_KEY=...
 uv run python -m evals.rodar                     # as seis suítes
 uv run python -m evals.rodar preco autonomia     # só o que interessa agora
 uv run python -m evals.rodar --gravar            # compara com a última execução e regrava
+uv run python -m evals.rodar --paralelo 1        # uma conversa por vez, para depurar
 ```
 
 `--gravar` diz **qual caso virou** desde a última execução (`ultima-execucao.json`,
@@ -34,6 +35,25 @@ sabe o que está fazendo. Postgres de pé é pré-requisito (`docker compose up 
 
 Sai `0` se toda suíte pedida atingiu o critério, `1` se alguma reprovou, `2` se falta
 provedor ou o banco não parece descartável.
+
+## Paralelismo, e por que ele não afrouxa nada
+
+As conversas de uma suíte rodam **ao mesmo tempo** — 8 por padrão, `--paralelo N` ou
+`EVSALES_EVAL_PARALELO` para mudar. Em série, os 28 casos dos três portões são umas 70 idas
+ao provedor uma atrás da outra, e o passo do CI estourava o limite de tempo antes de chegar
+ao veredito: portão que não termina não é portão.
+
+Conversa não conhece conversa — lead, telefone e `Session` são próprios de cada caso, e o
+catálogo, que é compartilhado, ninguém escreve durante a corrida. O teto é **15**, que é o
+tamanho do pool de conexões do `app.db`: cada conversa segura uma, e pedir mais só faz fila.
+
+O relatório sai na **ordem do arquivo**, não na de quem terminou primeiro — senão a execução
+de hoje não se compara com a de ontem.
+
+Um caso que **degrada** ganha uma segunda tentativa (`--tentativas`); um caso que **reprova**
+não ganha nenhuma. A diferença é a que o eval já faz em outro lugar: degradado é o provedor
+não tendo respondido, que é ausência de informação; reprovado é a Aurora tendo falado
+errado, que é resultado — e resultado que se repete até passar vira sorteio, não portão.
 
 ## As suítes
 

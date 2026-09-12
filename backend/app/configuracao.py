@@ -12,11 +12,13 @@ Nada aqui escreve no `.env`. Ele é gerado pelo `gerar-segredos.sh` e sobrescrit
 seguinte — a troca feita pela tela sumiria sem aviso.
 """
 
+import logging
 import os
 import time
 import uuid
 from enum import StrEnum
 
+from cryptography.exceptions import InvalidTag
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -63,6 +65,8 @@ VARIAVEL: dict[Chave, str] = {
     Chave.llm_fallbacks: VARIAVEL_FALLBACKS,
 }
 
+logger = logging.getLogger(__name__)
+
 VALIDADE_CACHE_S = 30
 
 # ponytail: cache em processo. Com o worker da S-10 §1 a invalidação não cruza processos, e
@@ -83,8 +87,16 @@ def _do_banco(sessao: Session) -> dict[Chave, str]:
 
     guardadas: dict[Chave, str] = {}
     for linha in sessao.scalars(select(Configuracao)).all():
-        if linha.chave in Chave.__members__:
+        if linha.chave not in Chave.__members__:
+            continue
+        try:
             guardadas[Chave(linha.chave)] = decifrar(linha.valor_cifrado)
+        except InvalidTag:
+            # Chave girada ou blob corrompido. A linha vira "não configurada" e o `valor()`
+            # cai no `.env`, como manda o ADR-014 — a mesma postura do `Lead.nome_mascarado`
+            # (S-09 §2): registro que não decifra não pode derrubar a tela. Aqui é pior que
+            # na fila, porque a tela derrubada é justamente a que reconfiguraria a chave.
+            logger.warning("configuracao %s não decifra com a EVSALES_PII_KEY atual", linha.chave)
     _cache = (time.monotonic(), guardadas)
     return guardadas
 
